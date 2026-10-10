@@ -1,0 +1,400 @@
+<title>Selangor Grocery Prices</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Manrope:wght@500;600;700;800&display=swap">
+<style>
+/* Layout: phone-app shell (max 480px) with bottom tab bar — Home / Deals / Stores / Insights — and a pushed product screen. Tangerine = brand, navy ink, mint only for "you save". */
+:root{
+  --page:#e9ecf2; --bg:#ffffff; --soft:#f4f6f9; --card:#ffffff; --tile-mix:100%; --ink:#191b22; --muted:#6b6e78; --line:#eceef2;
+  --brand:#ff5b22; --brand-ink:#ffffff; --brand-soft:#fff0e9; --navy:#1d2340;
+  --save:#0f9a68; --save-soft:#e5f6ee; --dear:#d6453b; --dear-soft:#fdeceb;
+  --shadow:0 1px 2px rgba(25,27,34,.04),0 6px 18px rgba(25,27,34,.07);
+  --f-display:"Sora",ui-sans-serif,system-ui,sans-serif;
+  --f-body:"Manrope",ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --page:#08090c; --bg:#111318; --soft:#171a20; --card:#1b1e25; --tile-mix:26%; --ink:#eef0f5; --muted:#9a9ea9; --line:#262a33;
+  --brand:#ff6a33; --brand-ink:#1a0a03; --brand-soft:#3a1f14; --navy:#c9cff0;
+  --save:#3fcf96; --save-soft:#14342a; --dear:#f07a70; --dear-soft:#3b1f1d; --shadow:0 2px 10px rgba(0,0,0,.35); color-scheme:dark}}
+:root[data-theme="dark"]{
+  --page:#08090c; --bg:#111318; --soft:#171a20; --card:#1b1e25; --tile-mix:26%; --ink:#eef0f5; --muted:#9a9ea9; --line:#262a33;
+  --brand:#ff6a33; --brand-ink:#1a0a03; --brand-soft:#3a1f14; --navy:#c9cff0;
+  --save:#3fcf96; --save-soft:#14342a; --dear:#f07a70; --dear-soft:#3b1f1d; --shadow:0 2px 10px rgba(0,0,0,.35); color-scheme:dark}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{background:var(--page);color:var(--ink);font:15px/1.45 var(--f-body);font-variant-numeric:tabular-nums}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer;text-align:left}
+:focus-visible{outline:3px solid color-mix(in srgb,var(--brand) 60%,transparent);outline-offset:2px;border-radius:8px}
+h1,h2,h3{font-family:var(--f-display);margin:0;letter-spacing:-.02em;text-wrap:balance}
+p{margin:0}
+.app{max-width:480px;min-height:100%;margin:0 auto;background:var(--bg);position:relative;padding-bottom:calc(84px + env(safe-area-inset-bottom,0px))}
+.screen{padding-inline:18px;padding-block:18px 24px;display:grid;gap:26px}
+.muted{color:var(--muted)}
+.row{display:flex;align-items:center;gap:10px}
+.between{justify-content:space-between}
+.sechead{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.sechead h2{font-size:19px;font-weight:700}
+.sechead button{color:var(--brand);font-weight:700;font-size:14px;white-space:nowrap}
+.sec{display:grid;gap:12px}
+
+/* Top */
+.top{display:grid;gap:14px}
+.loc{display:inline-flex;align-items:center;gap:6px;font-weight:700;font-size:14px}
+.loc svg{width:16px;height:16px;color:var(--brand)}
+.hello{font-size:26px;font-weight:800;line-height:1.15}
+.search{position:relative}
+.search svg{position:absolute;left:16px;top:50%;translate:0 -50%;width:20px;height:20px;color:var(--muted);pointer-events:none}
+.search input{width:100%;font:inherit;font-size:16px;color:var(--ink);background:var(--soft);border:1.5px solid var(--line);border-radius:16px;padding:14px 44px 14px 46px;box-shadow:var(--shadow)}
+.search input:focus{outline:none;border-color:var(--brand)}
+.search .clear{position:absolute;right:10px;top:50%;translate:0 -50%;width:30px;height:30px;border-radius:50%;display:grid;place-items:center;color:var(--muted);font-size:18px}
+
+/* Category grid */
+.cats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.cat{display:grid;justify-items:center;gap:6px;font-size:12.5px;font-weight:700;text-align:center}
+.cat .ic{width:100%;aspect-ratio:1;max-width:72px;border-radius:22px;display:grid;place-items:center}
+.cat .ic svg{width:40px;height:40px}
+
+/* Horizontal cards */
+.hscroll{display:flex;gap:12px;overflow-x:auto;scroll-snap-type:x mandatory;margin-inline:-18px;padding-inline:18px;padding-bottom:6px;scrollbar-width:none}
+.hscroll::-webkit-scrollbar{display:none}
+.hot{border:1px solid var(--line);flex:0 0 158px;scroll-snap-align:start;background:var(--card);border-radius:20px;padding:14px;display:grid;gap:8px;box-shadow:var(--shadow);align-content:start}
+.hot .thumb{height:84px;border-radius:16px;display:grid;place-items:center}
+.hot .thumb svg{width:52px;height:52px}
+.hot .nm{font-weight:700;font-size:14px;line-height:1.25;min-height:2.5em}
+.hot .pr{font-family:var(--f-display);font-size:18px;font-weight:700}
+.hot .at{font-size:12px;color:var(--muted)}
+.hot .at b{color:var(--ink)}
+
+/* Deal list */
+.list{border:1px solid var(--line);background:var(--card);border-radius:20px;box-shadow:var(--shadow);overflow:hidden}
+.li{display:grid;grid-template-columns:44px minmax(0,1fr) auto;gap:12px;align-items:center;padding:12px 14px;border-bottom:1px solid var(--line);width:100%}
+.li:last-child{border-bottom:0}
+.li:active{background:var(--bg)}
+.li .ic{width:46px;height:46px;border-radius:15px;display:grid;place-items:center}
+.li .ic svg{width:30px;height:30px}
+.li .t{min-width:0}
+.li .t b{display:block;font-weight:700;font-size:14.5px;line-height:1.3;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.li .t span{font-size:12.5px;color:var(--muted)}
+.li .r{text-align:right;display:grid;gap:3px;justify-items:end}
+.li .r b{font-family:var(--f-display);font-size:16px;font-weight:700;white-space:nowrap}
+.pill{font-size:11.5px;font-weight:800;padding:3px 8px;border-radius:99px;white-space:nowrap}
+.pill.save{background:var(--save-soft);color:var(--save)}
+.pill.dear{background:var(--dear-soft);color:var(--dear)}
+.pill.brand{background:var(--brand);color:var(--brand-ink)}
+.pill.soft{background:var(--soft);color:var(--muted)}
+
+/* Store cards */
+.storecard{border:1px solid var(--line);flex:0 0 150px;scroll-snap-align:start;border-radius:20px;padding:14px;display:grid;gap:6px;background:var(--card);box-shadow:var(--shadow)}
+.storecard.first{background:var(--navy);color:var(--bg)}
+.storecard .n{font-family:var(--f-display);font-weight:700;font-size:16px}
+.storecard .v{font-family:var(--f-display);font-size:24px;font-weight:800}
+.storecard .s{font-size:12px;opacity:.75}
+.avatar{width:36px;height:36px;border-radius:12px;display:grid;place-items:center;font-family:var(--f-display);font-weight:800;font-size:14px;background:var(--brand-soft);color:var(--brand)}
+
+
+/* Tabs / segmented */
+.seg{display:flex;background:var(--soft);border-radius:14px;padding:4px;gap:4px;box-shadow:var(--shadow)}
+.seg button{flex:1;text-align:center;padding:9px 6px;border-radius:10px;font-weight:700;font-size:13.5px;color:var(--muted)}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+.chips{display:flex;gap:8px;overflow-x:auto;margin-inline:-18px;padding-inline:18px;scrollbar-width:none}
+.chips::-webkit-scrollbar{display:none}
+.chip{white-space:nowrap;padding:8px 14px;border-radius:99px;background:var(--soft);font-weight:700;font-size:13px}
+.chip[aria-pressed="true"]{background:var(--brand);color:var(--brand-ink)}
+
+/* Product screen */
+.bar{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:color-mix(in srgb,var(--bg) 92%,transparent);backdrop-filter:blur(10px);display:flex;align-items:center;gap:10px;padding:12px 14px}
+.back{width:40px;height:40px;border-radius:14px;background:var(--card);display:grid;place-items:center;box-shadow:var(--shadow)}
+.back svg{width:20px;height:20px}
+.bar .ttl{font-weight:800;font-size:15px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.phero{border:1px solid var(--line);background:var(--card);border-radius:24px;padding:18px;display:grid;gap:14px;box-shadow:var(--shadow)}
+.phero .crumb{font-size:12.5px;font-weight:700;color:var(--muted)}
+.phero h1{font-size:22px;font-weight:800;line-height:1.2}
+.winner{background:var(--navy);color:var(--bg);border-radius:18px;padding:16px;display:grid;gap:10px}
+.winner .lbl{font-size:12px;font-weight:800;letter-spacing:.06em;color:var(--brand)}
+.winner .st{font-family:var(--f-display);font-size:22px;font-weight:800}
+.winner .pp{font-family:var(--f-display);font-size:32px;font-weight:800;line-height:1}
+.winner .pp small{font-family:var(--f-body);font-size:14px;font-weight:600;opacity:.7}
+.winner .sv{font-size:13.5px;opacity:.85}
+.winner .sv b{color:var(--brand)}
+.trio{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.trio div{background:var(--soft);border-radius:14px;padding:10px 12px;display:grid;gap:2px}
+.trio span{font-size:11.5px;color:var(--muted);font-weight:700}
+.trio b{font-size:14.5px;white-space:nowrap}
+.trio .lo b{color:var(--save)} .trio .hi b{color:var(--dear)}
+.srow{display:grid;grid-template-columns:36px minmax(0,1fr) auto;gap:12px;align-items:center;padding:12px 14px;border-bottom:1px solid var(--line)}
+.srow:last-child{border-bottom:0}
+.srow .t b{display:block;font-weight:700;font-size:14.5px}
+.srow .t span{font-size:12.5px;color:var(--muted)}
+.srow .r{text-align:right}
+.srow .r b{display:block;font-family:var(--f-display);font-weight:700}
+.srow .r span{font-size:12px;font-weight:700;color:var(--dear)}
+.srow.best{background:var(--brand-soft)}
+.srow.best .r span{color:var(--save)}
+select{font:inherit;font-size:13.5px;font-weight:700;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:12px;padding:8px 12px;box-shadow:var(--shadow)}
+
+/* Insights */
+.card{border:1px solid var(--line);background:var(--card);border-radius:20px;padding:16px;box-shadow:var(--shadow);display:grid;gap:12px}
+.stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.stat{border:1px solid var(--line);background:var(--card);border-radius:18px;padding:14px;box-shadow:var(--shadow);display:grid;gap:2px}
+.stat b{font-family:var(--f-display);font-size:22px;font-weight:800}
+.stat span{font-size:12px;color:var(--muted);font-weight:700}
+.bars{display:grid;gap:10px}
+.brow{display:grid;grid-template-columns:minmax(0,118px) 1fr 62px;gap:10px;align-items:center;font-size:13px}
+.brow .n{font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.brow .v{text-align:right;font-weight:800}
+.dv{position:relative;height:12px;background:var(--soft);border-radius:99px}
+.dv .mid{position:absolute;left:50%;top:-3px;bottom:-3px;width:2px;background:var(--line)}
+.dv i{position:absolute;top:0;bottom:0;border-radius:99px}
+.dv i.c{background:var(--save)} .dv i.d{background:var(--dear)}
+.axis{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);font-weight:700;padding-left:128px;padding-right:72px}
+.tbl{overflow-x:auto;margin-inline:-16px;padding-inline:16px}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{padding:8px 6px;text-align:left;border-bottom:1px solid var(--line);white-space:nowrap}
+th{font-size:11.5px;color:var(--muted);font-weight:800}
+td.r,th.r{text-align:right}
+.note{font-size:13px;color:var(--muted);line-height:1.55}
+.note a{color:var(--brand);font-weight:700}
+
+
+.tile{background:color-mix(in srgb,var(--t) var(--tile-mix),var(--card))}
+.banner{border-radius:22px;padding:18px;color:#fff;display:grid;gap:6px;background:linear-gradient(135deg,#ff5b22 0%,#ff8a3d 55%,#ffb347 100%);position:relative;overflow:hidden;box-shadow:0 8px 24px rgba(255,91,34,.28)}
+.banner b{font-family:var(--f-display);font-size:21px;line-height:1.2;max-width:15ch;position:relative}
+.banner span{font-size:13.5px;opacity:.95;max-width:26ch;position:relative}
+.banner .go{justify-self:start;margin-top:6px;background:#fff;color:#c23d0c;font-weight:800;font-size:13px;padding:8px 14px;border-radius:99px;position:relative}
+.banner svg.deco{position:absolute;right:-6px;bottom:-10px;width:118px;height:118px;opacity:.95}
+.av{color:#fff!important}
+
+/* Bottom nav */
+.nav{position:fixed;bottom:0;left:50%;translate:-50% 0;width:min(480px,100%);z-index:10;background:color-mix(in srgb,var(--card) 94%,transparent);backdrop-filter:blur(12px);border-top:1px solid var(--line);display:grid;grid-template-columns:repeat(4,1fr);padding:8px 8px calc(8px + env(safe-area-inset-bottom,0px))}
+.nav button{display:grid;justify-items:center;gap:3px;font-size:11.5px;font-weight:700;color:var(--muted);padding:6px 0;text-align:center}
+.nav svg{width:24px;height:24px}
+.nav button[aria-current="page"]{color:var(--brand)}
+.empty{padding:28px 18px;text-align:center;color:var(--muted)}
+@media (prefers-reduced-motion:no-preference){.screen{animation:in .22s ease}@keyframes in{from{opacity:.4;translate:0 6px}to{opacity:1;translate:0 0}}}
+</style>
+
+<div class="app"><main id="view"></main></div>
+<nav class="nav" id="nav" aria-label="Main">
+  <button data-tab="home"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11 12 4l9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>Home</button>
+  <button data-tab="deals"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z"/><circle cx="7.5" cy="7.5" r="1.5"/></svg>Deals</button>
+  <button data-tab="stores"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9h16l-1.5-5h-13z"/><path d="M5 9v11h14V9"/><path d="M10 20v-5h4v5"/></svg>Stores</button>
+  <button data-tab="insights"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Insights</button>
+</nav>
+
+<script>
+const D = __DATA__;
+const $ = s => document.querySelector(s);
+const view = $('#view');
+const rm = v => 'RM ' + v.toFixed(2);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const nice = s => s.toLowerCase().replace(/\s+/g,' ').replace(/(^|[\s(\/-])(\p{L})/gu, (m,a,b) => a + b.toUpperCase());
+const unit = u => u === '1kg' ? ' · per kg' : ' · ' + u;
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+const ICONS = {
+  chicken:['#ffe3c7','<ellipse cx="20" cy="20" rx="12" ry="10" transform="rotate(-35 20 20)" fill="#e38b3f"/><ellipse cx="17" cy="17" rx="6" ry="4" transform="rotate(-35 17 17)" fill="#f2a95f"/><rect x="26" y="24" width="5" height="13" rx="2.5" transform="rotate(-45 28.5 30.5)" fill="#fff4e6" stroke="#d9c2a2"/><circle cx="35" cy="37" r="3.2" fill="#fff4e6" stroke="#d9c2a2"/><circle cx="38" cy="34" r="3.2" fill="#fff4e6" stroke="#d9c2a2"/>'],
+  egg:['#fff3c4','<ellipse cx="24" cy="26" rx="12" ry="15" fill="#fffaf0" stroke="#ecd9ad" stroke-width="1.5"/><circle cx="24" cy="29" r="6.5" fill="#ffb81c"/><circle cx="22" cy="27" r="2" fill="#ffd66b"/>'],
+  rice:['#dbe8ff','<path d="M8 24h32a16 14 0 0 1-32 0z" fill="#3d7be0"/><path d="M11 24c0-7 6-12 13-12s13 5 13 12z" fill="#fff"/><path d="M8 24h32" stroke="#2c5fb3" stroke-width="2"/><circle cx="18" cy="19" r="1.2" fill="#dfe6f2"/><circle cx="25" cy="16" r="1.2" fill="#dfe6f2"/><circle cx="30" cy="20" r="1.2" fill="#dfe6f2"/><path d="M29 6l12 15M33 5l10 14" stroke="#8b5a2b" stroke-width="2" stroke-linecap="round"/><path d="M12 32h24" stroke="#6fa0f0" stroke-width="2" opacity=".6"/>'],
+  fish:['#d6f0ff','<path d="M6 24c6-9 16-12 25-7l9-7v28l-9-7c-9 5-19 2-25-7z" fill="#3aa0e8"/><path d="M31 17l9-7v28l-9-7z" fill="#2a7fc0"/><path d="M8 24c5 5 13 7 21 4" stroke="#8fd0ff" stroke-width="2" fill="none"/><circle cx="14" cy="22" r="2.2" fill="#fff"/><circle cx="14" cy="22" r="1.1" fill="#123"/>'],
+  meat:['#ffdfe0','<path d="M28 7c8 0 13 6 13 13 0 11-12 21-22 21-7 0-12-5-12-11C7 17 17 7 28 7z" fill="#f4c7c3"/><path d="M28 10c6 0 10 5 10 10 0 9-10 18-18 18-5 0-9-4-9-8 0-11 8-20 17-20z" fill="#d9424c"/><circle cx="27" cy="20" r="4.5" fill="#fff5f0" stroke="#e8bdb0"/><path d="M17 30c3-2 6-2 9 0" stroke="#f08a90" stroke-width="2" fill="none"/>'],
+  veg:['#dff5dc','<path d="M16 42L30 16l5 5z" fill="#ff8a2a"/><path d="M22 34l4 1M25 28l4 1" stroke="#e06a10" stroke-width="1.6" stroke-linecap="round"/><path d="M31 17c1-6 5-9 10-9-1 5-4 8-8 9zM33 20c4-3 9-3 12 0-4 3-8 3-11 1zM30 15c-2-5-1-9 3-11 1 4 0 8-2 10z" fill="#3cb55e"/>'],
+  oil:['#fff1c2','<rect x="20" y="4" width="8" height="6" rx="2" fill="#2f9a55"/><path d="M19 10h10l4 7v23a3 3 0 0 1-3 3H18a3 3 0 0 1-3-3V17z" fill="#ffe7a0" stroke="#e5c04a" stroke-width="1.2"/><path d="M15 24h18v16a3 3 0 0 1-3 3H18a3 3 0 0 1-3-3z" fill="#f5b70f"/><rect x="18" y="27" width="12" height="8" rx="2" fill="#fff" opacity=".9"/><path d="M20 12l-2 4" stroke="#fff" stroke-width="2" stroke-linecap="round" opacity=".7"/>'],
+  milk:['#dcecff','<path d="M16 12l4-7h10l4 7z" fill="#5aa3f0"/><path d="M14 12h20v30a2 2 0 0 1-2 2H16a2 2 0 0 1-2-2z" fill="#fff" stroke="#c9dcf2" stroke-width="1.2"/><path d="M14 26c4-3 8 3 12 0s6-2 8-1v17a2 2 0 0 1-2 2H16a2 2 0 0 1-2-2z" fill="#5aa3f0"/><circle cx="24" cy="18" r="3" fill="#ffcf4a"/>'],
+  onion:['#f3dcf7','<path d="M24 7c-2 4-12 10-12 21a12 12 0 0 0 24 0C36 17 26 11 24 7z" fill="#b04fa8"/><path d="M24 12c-4 5-6 11-6 17s2 10 6 12M24 12c4 5 6 11 6 17s-2 10-6 12" stroke="#d98ad3" stroke-width="1.6" fill="none"/><path d="M24 7V2" stroke="#6cae3e" stroke-width="2.4" stroke-linecap="round"/><path d="M19 41h10" stroke="#e9d5b0" stroke-width="2" stroke-linecap="round"/>'],
+  sugar:['#fde2ef','<path d="M8 22l10-5 10 5-10 5z" fill="#fff"/><path d="M8 22v10l10 5V27z" fill="#e9eef5"/><path d="M28 22v10l-10 5V27z" fill="#d6dde8"/><path d="M22 14l9-4 9 4-9 4z" fill="#fff"/><path d="M22 14v9l9 4v-9z" fill="#e9eef5"/><path d="M40 14v9l-9 4v-9z" fill="#d6dde8"/><circle cx="36" cy="36" r="5" fill="#ff7eb3"/>'],
+  fruit:['#ffe0dc','<path d="M24 14c-4-3-14-2-14 10 0 9 6 17 11 17 2 0 2-1 3-1s1 1 3 1c5 0 11-8 11-17 0-12-10-13-14-10z" fill="#e84545"/><path d="M17 20c-1 3-1 7 0 10" stroke="#ff8a80" stroke-width="2.4" stroke-linecap="round"/><path d="M24 14c0-4 1-7 3-9" stroke="#7a4a22" stroke-width="2" stroke-linecap="round"/><path d="M26 9c3-4 8-4 10-2-3 3-7 4-10 2z" fill="#3cb55e"/>'],
+  chili:['#ffe0d6','<path d="M13 15c5 1 8 5 9 11 2 9 8 14 16 15-11 3-22-3-25-14-1-5-1-9 0-12z" fill="#e53935"/><path d="M15 19c1 6 4 12 10 16" stroke="#ff8a80" stroke-width="2" fill="none" stroke-linecap="round"/><path d="M13 15c-1-4 1-8 5-10" stroke="#3a9a4a" stroke-width="3" stroke-linecap="round" fill="none"/>'],
+  drink:['#f1e4d8','<path d="M11 16h22l-3 24a3 3 0 0 1-3 3H17a3 3 0 0 1-3-3z" fill="#fff" stroke="#e0cdbb" stroke-width="1.2"/><path d="M12.5 22h19l-2 15H14.5z" fill="#8b5a3c"/><path d="M33 20h3a5 5 0 0 1 0 10h-4" stroke="#e0cdbb" stroke-width="3" fill="none"/><path d="M19 11c0-3 3-3 3-6M25 11c0-3 3-3 3-6" stroke="#c9b7a6" stroke-width="2" stroke-linecap="round" fill="none"/>'],
+  clean:['#d3f5f3','<path d="M18 16h12l2 26H16z" fill="#2fc0c0"/><rect x="19" y="24" width="10" height="9" rx="2" fill="#fff" opacity=".85"/><path d="M20 9h9v7H20z" fill="#4a5568"/><path d="M29 10h8l-2 4h-6" fill="#4a5568"/><circle cx="40" cy="10" r="1.2" fill="#8fe3e3"/><circle cx="42" cy="14" r="1.2" fill="#8fe3e3"/><circle cx="41" cy="6" r="1.2" fill="#8fe3e3"/>'],
+  bag:['#ffe6d6','<path d="M10 17h28l-2 24a2 2 0 0 1-2 2H14a2 2 0 0 1-2-2z" fill="#ff7a45"/><path d="M17 17v-4a7 7 0 0 1 14 0v4" stroke="#c9531f" stroke-width="2.6" fill="none"/><path d="M10 17h28l-.4 5H10.4z" fill="#ff9a6c"/><circle cx="17" cy="21" r="1.6" fill="#c9531f"/><circle cx="31" cy="21" r="1.6" fill="#c9531f"/>'],
+  tag:['#ffe6d6','<path d="M24 6h16v16L22 40a3 3 0 0 1-4 0L8 30a3 3 0 0 1 0-4z" fill="#ff5b22"/><circle cx="33" cy="13" r="3" fill="#fff"/><path d="M16 26l8-8M20 30l8-8" stroke="#fff" stroke-width="2" stroke-linecap="round" opacity=".7"/>'],
+};
+const svg = k => `<svg viewBox="0 0 48 48" aria-hidden="true">${(ICONS[k]||ICONS.bag)[1]}</svg>`;
+const tint = k => (ICONS[k]||ICONS.bag)[0];
+function iconFor(i){
+  const n = i.n + ' ' + i.k;
+  if(/AYAM/.test(n) && !/TELUR|SARDIN|SANTAN|KICAP/.test(n)) return 'chicken';
+  if(/TELUR/.test(n)) return 'egg';
+  if(/BERAS/.test(n) && !/CERELAC/.test(n)) return 'rice';
+  if(/IKAN|UDANG|SOTONG|KETAM|BAHAN LAUT|SARDIN/.test(n)) return 'fish';
+  if(/DAGING|KAMBING|LEMBU|KERBAU/.test(n)) return 'meat';
+  if(/BAWANG/.test(n)) return 'onion';
+  if(/MINYAK/.test(n)) return 'oil';
+  if(/SUSU|MILO|KRIMER|CERELAC|LACTOGEN|DUMEX|ANMUM/.test(n)) return 'milk';
+  if(/GULA|GARAM|TEPUNG/.test(n)) return 'sugar';
+  if(/CILI/.test(n)) return 'chili';
+  if(/BUAH|NENAS|PISANG|ANGGUR|EPAL|TEMBIKAI|BETIK|LIMAU|OREN/.test(n)) return 'fruit';
+  if(/KOPI|TEH|MINUMAN|MINUM/.test(n)) return 'drink';
+  if(/SAYUR|KUBIS|TOMATO|KENTANG|HALIA|LOBAK|SAWI|KANGKUNG|TIMUN|KELAPA|BAYAM|TERUNG|KACANG/.test(n)) return 'veg';
+  if(/KEBERSIHAN|PENJAGAAN|SABUN|LAMPIN/.test(n)) return 'clean';
+  return 'bag';
+}
+const EN = {AYAM:'chicken',TELUR:'egg eggs',BERAS:'rice',DAGING:'meat',LEMBU:'beef',KAMBING:'mutton goat lamb',KERBAU:'buffalo',IKAN:'fish',
+  UDANG:'prawn shrimp',SOTONG:'squid',KETAM:'crab',SAYUR:'vegetable',BAWANG:'onion garlic',GULA:'sugar',MINYAK:'oil',MASAK:'cooking',
+  SUSU:'milk',TEPUNG:'flour',KICAP:'soy sauce',SOS:'sauce',LAMPIN:'diaper nappy',BUAH:'fruit',KELAPA:'coconut',SANTAN:'coconut milk',
+  CILI:'chili chilli',KUBIS:'cabbage',KENTANG:'potato',KACANG:'beans nuts',GARAM:'salt',MENTEGA:'butter',MEE:'noodles',BIHUN:'vermicelli',
+  KOPI:'coffee',TEH:'tea',SABUN:'soap',PISANG:'banana',EPAL:'apple',LIMAU:'lime orange',HALIA:'ginger',LOBAK:'carrot radish',TIMUN:'cucumber',
+  BAYAM:'spinach',SAWI:'mustard greens',KANGKUNG:'water spinach',TAUHU:'tofu',ANGGUR:'grapes',NENAS:'pineapple',TEMBIKAI:'watermelon'};
+D.items.forEach(i => {
+  i.title = nice(i.n);
+  i.icon = iconFor(i);
+  i.hay = (i.n + ' ' + i.k + ' ' + (i.n + ' ' + i.k).toUpperCase().split(/[^A-Z]+/).map(w => EN[w] || '').join(' ')).toLowerCase();
+  i.best = i.chains[0];
+  i.worst = i.chains.reduce((a, b) => b[1] > a[1] ? b : a);
+  i.gap = i.worst[1] - i.best[1];
+  i.below = (i.med - i.best[1]) / i.med;
+});
+const byCode = c => D.items.find(i => i.c === c);
+const HOT = [1,1109,1589,129,263,2114,1611,917,55,114,1131,224].map(byCode).filter(Boolean);
+const CATS = [['Chicken','ayam','chicken'],['Eggs','telur','egg'],['Rice','beras','rice'],['Fish','ikan','fish'],['Meat','daging','meat'],['Veggies','sayur','veg'],['Oil','minyak','oil'],['Milk','susu','milk']];
+const initials = n => n.replace(/[^A-Za-z0-9 ]/g,'').split(' ').filter(Boolean).slice(0,2).map(w => w[0]).join('').toUpperCase();
+const pctOf = idx => (idx - 1) * 100;
+const SC = ['#16a394','#ff6b35','#5b6cff','#e8a300','#e84a7a','#2e9be6','#8c5cf0','#20a060','#d9534f','#0f7c8c','#c26a00','#6d7a8a','#b0469c','#3c8d2f','#7a5af5','#e07b39','#4a6fa5'];
+const chainColor = {}; D.index.forEach((r, k) => chainColor[r[0]] = SC[k % SC.length]);
+const av = (name, big) => `<span class="avatar av" style="background:${chainColor[name]||'#6d7a8a'}${big?';width:44px;height:44px':''}">${initials(name)}</span>`;
+
+let state = {tab:'home', q:'', dealSort:'rm', dealGroup:'', product:null, district:'', prevTab:'home', storeSel:null};
+function setTab(t){ state.tab = t; state.product = null; state.storeSel = null; render(); window.scrollTo({top:0}); }
+function openProduct(c){ state.prevTab = state.tab; state.product = c; state.district = ''; render(); window.scrollTo({top:0}); }
+$('#nav').addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if(b) setTab(b.dataset.tab); });
+view.addEventListener('click', e => {
+  const p = e.target.closest('[data-p]'); if(p){ openProduct(+p.dataset.p); return; }
+  const a = e.target.closest('[data-act]'); if(!a) return;
+  const act = a.dataset.act;
+  if(act === 'back'){ state.product = null; render(); }
+  else if(act === 'cat'){ state.q = a.dataset.q; render(); setTimeout(() => $('#q') && $('#q').focus(), 0); }
+  else if(act === 'clear'){ state.q = ''; render(); }
+  else if(act === 'go'){ setTab(a.dataset.to); }
+  else if(act === 'sort'){ state.dealSort = a.dataset.v; render(); }
+  else if(act === 'dgroup'){ state.dealGroup = a.dataset.v; render(); }
+  else if(act === 'store'){ state.storeSel = a.dataset.v === state.storeSel ? null : a.dataset.v; render(); }
+});
+
+function itemRow(i, right){
+  return `<button class="li" data-p="${i.c}"><span class="ic tile" style="--t:${tint(i.icon)}">${svg(i.icon)}</span>
+    <span class="t"><b>${esc(i.title)}</b><span>${esc(i.best[0])}${unit(i.u)}</span></span>
+    <span class="r">${right || `<b>${rm(i.best[1])}</b>`}</span></button>`;
+}
+
+function Home(){
+  const q = state.q.trim().toLowerCase();
+  const header = `<div class="top">
+    <div class="row between"><span class="loc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 21s7-6.2 7-11a7 7 0 0 0-14 0c0 4.8 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>Selangor</span><span class="pill soft">${esc(D.month)}</span></div>
+    <h1 class="hello">What are you buying today?</h1>
+    <label class="search" for="q"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input id="q" type="search" placeholder="Search chicken, telur, beras…" value="${esc(state.q)}" autocomplete="off" aria-label="Search products">
+      ${state.q ? '<button class="clear" data-act="clear" aria-label="Clear search">×</button>' : ''}</label></div>`;
+  if(q){
+    const terms = q.split(/\s+/);
+    const res = D.items.filter(i => terms.every(t => i.hay.includes(t)));
+    return `<div class="screen">${header}<div class="sec"><div class="sechead"><h2>${res.length} result${res.length===1?'':'s'}</h2></div>
+      ${res.length ? `<div class="list">${res.slice(0,60).map(i => itemRow(i, `<b>${rm(i.best[1])}</b><span class="pill soft">${i.chains.length} stores</span>`)).join('')}</div>`
+        : `<div class="empty">Nothing found for “${esc(state.q)}”.<br>Try another word in English or Malay.</div>`}</div></div>`;
+  }
+  const deals = [...D.items].filter(i => i.chains.length >= 3).sort((a,b) => b.below - a.below).slice(0,5);
+  return `<div class="screen">${header}
+    <div class="cats">${CATS.map(([l,q,ic]) => `<button class="cat" data-act="cat" data-q="${q}"><span class="ic tile" style="--t:${tint(ic)}">${svg(ic)}</span>${l}</button>`).join('')}</div>
+    <button class="banner" data-act="go" data-to="stores"><b>${esc(D.index[0][0])} is ${Math.abs(pctOf(D.index[0][1])).toFixed(0)}% cheaper this month</b><span>Lowest average prices across ${D.index[0][2]} products in Selangor.</span><span class="go">See store ranking</span><svg class="deco" viewBox="0 0 48 48" aria-hidden="true">${ICONS.bag[1]}</svg></button>
+    <div class="sec"><div class="sechead"><h2>Hot picks</h2><span class="muted" style="font-size:13px">Kitchen staples</span></div>
+      <div class="hscroll">${HOT.map(i => `<button class="hot" data-p="${i.c}"><span class="thumb tile" style="--t:${tint(i.icon)}">${svg(i.icon)}</span>
+        <span class="nm">${esc(i.title)}</span><span class="pr">${rm(i.best[1])}</span><span class="at">cheapest at <b>${esc(i.best[0])}</b></span></button>`).join('')}</div></div>
+    <div class="sec"><div class="sechead"><h2>Cheapest right now</h2><button data-act="go" data-to="deals">See all</button></div>
+      <div class="list">${deals.map(i => itemRow(i, `<b>${rm(i.best[1])}</b><span class="pill save">${Math.round(i.below*100)}% below usual</span>`)).join('')}</div></div>
+    <div class="sec"><div class="sechead"><h2>Cheapest stores</h2><button data-act="go" data-to="stores">See all</button></div>
+      <div class="hscroll">${D.index.slice(0,5).map((r,k) => `<div class="storecard ${k===0?'first':''}">${av(r[0])}<span class="n">${esc(r[0])}</span>
+        <span class="v">${Math.abs(pctOf(r[1])).toFixed(1)}%</span><span class="s">${pctOf(r[1])<0?'cheaper':'pricier'} than usual</span></div>`).join('')}</div></div>
+  </div>`;
+}
+
+function Deals(){
+  const groups = [...new Set(D.items.map(i => i.g))];
+  const GN = {'BARANGAN SEGAR':'Fresh','BARANGAN BERBUNGKUS':'Packaged','BARANGAN KERING':'Dry goods','MINUMAN':'Drinks','SUSU DAN BARANGAN BAYI':'Milk & baby','PRODUK KEBERSIHAN':'Cleaning','BARANGAN KEDAI SERBANEKA':'Convenience'};
+  let list = D.items.filter(i => i.chains.length >= 3 && (!state.dealGroup || i.g === state.dealGroup));
+  list.sort(state.dealSort === 'rm' ? (a,b) => b.gap - a.gap : (a,b) => b.below - a.below);
+  list = list.slice(0, 40);
+  return `<div class="screen"><div class="top"><h1 class="hello">Deals</h1><p class="muted">Where choosing the right store saves you the most this month.</p></div>
+    <div class="seg"><button data-act="sort" data-v="rm" aria-pressed="${state.dealSort==='rm'}">Most RM saved</button><button data-act="sort" data-v="pct" aria-pressed="${state.dealSort==='pct'}">Furthest below usual</button></div>
+    <div class="chips">${[['','All'],...groups.map(g => [g, GN[g]||nice(g)])].map(([v,l]) => `<button class="chip" data-act="dgroup" data-v="${esc(v)}" aria-pressed="${state.dealGroup===v}">${esc(l)}</button>`).join('')}</div>
+    <div class="list">${list.map(i => itemRow(i, state.dealSort==='rm'
+      ? `<b>${rm(i.best[1])}</b><span class="pill save">Save ${rm(i.gap)}</span>`
+      : `<b>${rm(i.best[1])}</b><span class="pill save">${Math.round(i.below*100)}% below usual</span>`)).join('')}</div></div>`;
+}
+
+function Stores(){
+  const rows = D.index;
+  const sel = state.storeSel;
+  const wins = sel ? D.items.filter(i => i.best[0] === sel).sort((a,b) => b.gap - a.gap) : [];
+  return `<div class="screen"><div class="top"><h1 class="hello">Stores</h1><p class="muted">Ranked by how their prices compare with the usual Selangor price. Tap a store to see what it's cheapest for.</p></div>
+    <div class="list">${rows.map((r,k) => {
+      const p = pctOf(r[1]), cls = p < -0.5 ? 'save' : p > 0.5 ? 'dear' : 'soft';
+      const txt = p < -0.5 ? `${Math.abs(p).toFixed(1)}% cheaper` : p > 0.5 ? `${p.toFixed(1)}% pricier` : 'Average';
+      return `<button class="li" data-act="store" data-v="${esc(r[0])}" aria-expanded="${sel===r[0]}" style="${sel===r[0]?'background:var(--brand-soft)':''}">
+        ${av(r[0], true)}
+        <span class="t"><b>${esc(r[0])}</b><span>${r[3]} shop${r[3]>1?'s':''} checked · cheapest on ${r[4]} items</span></span>
+        <span class="r"><span class="pill ${cls}">${txt}</span></span></button>` +
+        (sel === r[0] ? `<div style="padding:4px 0 8px;background:var(--bg)">${wins.length ? wins.slice(0,15).map(i => itemRow(i, `<b>${rm(i.best[1])}</b>${i.gap>0?`<span class="pill save">Save ${rm(i.gap)}</span>`:''}`)).join('') : '<div class="empty">Not the cheapest on any product this month.</div>'}</div>` : '');
+    }).join('')}</div></div>`;
+}
+
+function Insights(){
+  const lim = Math.ceil(Math.max(...D.index.map(r => Math.abs(pctOf(r[1])))) / 5) * 5;
+  // Cheapest store per product group
+  const GN = {'BARANGAN SEGAR':'Fresh produce','BARANGAN BERBUNGKUS':'Packaged goods','BARANGAN KERING':'Dry goods','MINUMAN':'Drinks','SUSU DAN BARANGAN BAYI':'Milk & baby','PRODUK KEBERSIHAN':'Cleaning & care','BARANGAN KEDAI SERBANEKA':'Convenience'};
+  const agg = {};
+  D.items.forEach(i => i.chains.forEach(c => {
+    const k = i.g + '|' + c[0]; (agg[k] = agg[k] || {g:i.g, s:c[0], sum:0, n:0}); agg[k].sum += Math.min(2, Math.max(.5, c[1]/i.med)); agg[k].n++;
+  }));
+  const byG = {};
+  Object.values(agg).filter(a => a.n >= 8).forEach(a => { const v = a.sum/a.n; if(!byG[a.g] || v < byG[a.g].v) byG[a.g] = {s:a.s, v, n:a.n}; });
+  const spread = [...D.items].sort((a,b) => (b.max-b.min)/b.med - (a.max-a.min)/a.med).slice(0,5);
+  return `<div class="screen"><div class="top"><h1 class="hello">Insights</h1><p class="muted">The numbers behind the prices, for ${esc(D.month)}.</p></div>
+    <div class="stats"><div class="stat"><b>${D.n_outlets}</b><span>shops checked</span></div><div class="stat"><b>${D.n_items}</b><span>products</span></div><div class="stat"><b>${Math.round(D.rows/1000)}k</b><span>price checks</span></div></div>
+    <div class="card"><h2 style="font-size:17px">Store price index</h2><p class="note">Average of each store's prices compared with the usual Selangor price. Left of centre is cheaper.</p>
+      <div class="bars">${D.index.map(r => { const p = pctOf(r[1]), w = Math.abs(p)/lim*50;
+        return `<div class="brow"><span class="n">${esc(r[0])}</span><span class="dv"><span class="mid"></span><i class="${p<0?'c':'d'}" style="left:${p<0?50-w:50}%;width:${w}%"></i></span><span class="v" style="color:var(${p<0?'--save':'--dear'})">${p>0?'+':'−'}${Math.abs(p).toFixed(1)}%</span></div>`; }).join('')}</div>
+      <div class="axis"><span>−${lim}%</span><span>usual</span><span>+${lim}%</span></div></div>
+    <div class="card"><h2 style="font-size:17px">Cheapest store by category</h2>
+      <div class="tbl"><table><thead><tr><th>Category</th><th>Cheapest store</th><th class="r">vs usual</th></tr></thead><tbody>
+      ${Object.entries(byG).map(([g,a]) => `<tr><td>${esc(GN[g]||nice(g))}</td><td><b>${esc(a.s)}</b></td><td class="r" style="color:var(--save);font-weight:800">−${((1-a.v)*100).toFixed(1)}%</td></tr>`).join('')}
+      </tbody></table></div><p class="note">Only stores with at least 8 products in the category are counted.</p></div>
+    <div class="card"><h2 style="font-size:17px">Widest price ranges</h2><p class="note">Same product, very different prices depending on where you buy.</p>
+      <div class="list" style="box-shadow:none;margin-inline:-16px;border-radius:0">${spread.map(i => itemRow(i, `<b>${rm(i.min)}–${rm(i.max).slice(3)}</b><span class="pill dear">${Math.round(i.max/i.min*10)/10}× range</span>`)).join('')}</div></div>
+    <div class="card"><h2 style="font-size:17px">About the data</h2>
+      <p class="note">Prices come from <a href="https://data.gov.my/data-catalogue/pricecatcher" target="_blank" rel="noopener">PriceCatcher by KPDN &amp; DOSM</a> (CC BY 4.0), checked in person by officers. Only grocery shops are included. Each shop's price is its middle reading for the month, products sold in fewer than 3 shops are left out, and ${D.dropped} readings that looked like typing mistakes were removed. Tesco shops count as Lotus's. Some stores have only 1–4 shops checked, so treat their numbers as rough.</p></div>
+  </div>`;
+}
+
+function Product(){
+  const i = byCode(state.product);
+  const districts = [...new Set(i.outlets.map(o => o[2]))].sort();
+  const shops = i.outlets.filter(o => !state.district || o[2] === state.district);
+  const low = shops.length ? shops[0][3] : 0;
+  return `<div class="bar"><button class="back" data-act="back" aria-label="Back"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button><span class="ttl">${esc(i.title)}</span></div>
+  <div class="screen" style="padding-top:4px">
+    <div class="phero"><span class="crumb">${esc(nice(i.k))} · ${esc(i.u)}</span><h1>${esc(i.title)}</h1>
+      <div class="winner"><span class="lbl">CHEAPEST STORE</span>
+        <div class="row between" style="align-items:end;flex-wrap:wrap"><span class="st">${esc(i.best[0])}</span><span class="pp">${rm(i.best[1])}<small>${i.u==='1kg'?' /kg':''}</small></span></div>
+        <span class="sv">Save <b>${rm(i.gap)}</b> compared with ${esc(i.worst[0])}</span></div>
+      <div class="trio"><div class="lo"><span>Lowest</span><b>${rm(i.min)}</b></div><div><span>Usual</span><b>${rm(i.med)}</b></div><div class="hi"><span>Highest</span><b>${rm(i.max)}</b></div></div></div>
+    <div class="sec"><div class="sechead"><h2>Compare stores</h2><span class="muted" style="font-size:13px">${i.chains.length} stores</span></div>
+      <div class="list">${i.chains.map((c,k) => `<div class="srow ${k===0?'best':''}">${av(c[0])}
+        <span class="t"><b>${esc(c[0])}</b><span>${c[3]} shop${c[3]>1?'s':''}${c[3]>1?` · from ${rm(c[2])}`:''}</span></span>
+        <span class="r"><b>${rm(c[1])}</b><span>${k===0?'Best price':'+'+rm(c[1]-i.best[1])}</span></span></div>`).join('')}</div></div>
+    <div class="sec"><div class="sechead"><h2>Shops near you</h2>
+      <select id="dist" aria-label="District"><option value="">All districts</option>${districts.map(d => `<option ${d===state.district?'selected':''}>${esc(d)}</option>`).join('')}</select></div>
+      <div class="list">${shops.slice(0,15).map(o => `<div class="srow ${o[3]===low?'best':''}">${av(o[1])}
+        <span class="t"><b>${esc(nice(o[0]))}</b><span>${esc(o[1])} · ${esc(o[2])}</span></span><span class="r"><b>${rm(o[3])}</b></span></div>`).join('')}</div>
+      ${shops.length > 15 ? `<p class="note">+ ${shops.length-15} more shops at ${rm(shops[14][3])} or higher.</p>` : ''}</div>
+  </div>`;
+}
+
+function render(){
+  const T = {home:Home, deals:Deals, stores:Stores, insights:Insights};
+  view.innerHTML = state.product ? Product() : T[state.tab]();
+  document.querySelectorAll('#nav [data-tab]').forEach(b => b.dataset.tab === state.tab ? b.setAttribute('aria-current','page') : b.removeAttribute('aria-current'));
+  const q = $('#q');
+  if(q) q.addEventListener('input', e => { const pos = e.target.selectionStart; state.q = e.target.value; render(); const n = $('#q'); n.focus(); n.setSelectionRange(pos, pos); });
+  const d = $('#dist'); if(d) d.addEventListener('change', e => { state.district = e.target.value; render(); });
+}
+render();
+</script>
