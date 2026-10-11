@@ -60,9 +60,12 @@ def main():
         download(f"{BASE_URL}/{name}.parquet", RAW_DIR / f"{name}.parquet", force=True)
 
     print(f"Monthly prices ({MONTHS_OF_HISTORY} months):")
-    for ym in last_complete_months(MONTHS_OF_HISTORY):
+    months = last_complete_months(MONTHS_OF_HISTORY)
+    for ym in months:
         name = f"pricecatcher_{ym}.parquet"
-        download(f"{BASE_URL}/{name}", RAW_DIR / name)
+        # data.gov.my keeps adding late readings to the newest month for a
+        # while, so always re-fetch it. Older months are final.
+        download(f"{BASE_URL}/{name}", RAW_DIR / name, force=(ym == months[-1]))
 
     print("Done.")
 
