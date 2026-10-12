@@ -4,6 +4,7 @@ import { useFetch } from '../hooks'
 import { useLang } from '../i18n'
 import { LABEL_CLASS, nice, rm, shortDate, unitText } from '../format'
 import { PriceChart } from './PriceChart'
+import { NearMe } from './NearMe'
 
 const SAY = { Low: 'sayLow', Normal: 'sayNormal', High: 'sayHigh' }
 
@@ -54,7 +55,7 @@ export function ItemDetail({ code, district, onClose, wide }) {
             <p className="empty">{d.priced_anywhere ? t('noFresh', { d: district }) : t('notPricedLong')}</p>
           )}
 
-          <BasketToggle basket={basket} item={{ code: d.item_code, name: d.name, unit: d.unit }} />
+            {d.priced_anywhere && <BasketToggle basket={basket} item={{ code: d.item_code, name: d.name, unit: d.unit }} />}
 
           {d.label && (
             <div className="verdict">
@@ -70,6 +71,7 @@ export function ItemDetail({ code, district, onClose, wide }) {
           )}
         </div>
 
+        {d.priced_anywhere && <NearMe code={d.item_code} />}
         {d.history.length > 1 && (
           <section className="sec">
             <div className="sechead"><h2>{t('priceHistory')}</h2><span className="muted small">{historyWhere}</span></div>

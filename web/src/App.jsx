@@ -42,6 +42,7 @@ export default function App() {
     const footer = (
     <footer className="note">
       <p>{t('footer')}</p>
+      <p><a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">{t('osmCredit')}</a></p>
       <p className="version">{t('version', { v: import.meta.env.VITE_APP_VERSION, b: import.meta.env.VITE_APP_BUILD })}</p>
     </footer>
   )

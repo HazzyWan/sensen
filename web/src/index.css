@@ -154,6 +154,14 @@ p { margin: 0; }
 .srow { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 12px 14px; border-bottom: 1px solid var(--line); }
 .srow:last-child { border-bottom: 0; }
 .srow.best { background: var(--brand-soft); }
+.nearask { text-align: center; justify-items: center; }
+.nearask .btn { order: 0; }
+.chips { display: flex; gap: 8px; flex-wrap: wrap; }
+.chip { padding: 6px 12px; border-radius: 99px; border: 1px solid var(--line); background: var(--card); font-weight: 700; font-size: 13px; }
+.chip[aria-pressed="true"] { background: var(--brand); border-color: var(--brand); color: var(--brand-ink); }
+.near-tag { color: var(--save); font-weight: 700; }
+.maplink { color: var(--brand); font-weight: 700; text-decoration: none; }
+.note a { color: inherit; }
 .rank { width: 26px; height: 26px; border-radius: 9px; background: var(--soft); display: grid; place-items: center; font-weight: 800; font-size: 13px; color: var(--muted); }
 .srow .r span { font-size: 12px; }
 
