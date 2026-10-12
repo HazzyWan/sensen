@@ -34,8 +34,11 @@ latest = pd.read_parquet(SERVE_DIR / "latest_prices.parquet")
 DISTRICT_REGION = (latest[["district", "region"]].drop_duplicates()
                    .set_index("district")["region"].to_dict())
 
-# (area, item_code) -> label row, for fast lookups
-LABEL_BY_AREA = {(r.area, r.item_code): r for r in labels.itertuples()}
+# (area_type, area, item_code) -> label row, for fast lookups. area_type is part
+# of the key because "Kuala Lumpur" is both a district and a region.
+LABEL_BY_AREA = {(r.area_type, r.area, r.item_code): r for r in labels.itertuples()}
+
+HISTORY_MIN_WEEKS = 8  # fewer district weeks than this -> chart uses the region
 
 # ---------- Response shapes (these also drive the /docs page) ----------
 
@@ -72,6 +75,48 @@ class SearchResult(BaseModel):
     label_scope: Literal["district", "region"] | None
 
 
+class LabelInfo(BaseModel):
+    label: Label
+    scope: Literal["district", "region"]
+    week: date
+    weekly_price: float
+    usual_low: float
+    usual_high: float
+    shops: int
+    history_weeks: int
+
+
+class ShopPrice(BaseModel):
+    shop: str
+    chain: str
+    shop_type: str
+    price: float
+    price_date: date
+    more_than_cheapest: float
+
+
+class WeekPoint(BaseModel):
+    week: date
+    price: float
+    shops: int
+
+
+class ItemDetail(BaseModel):
+    item_code: int
+    name: str
+    unit: str
+    category: str
+    group: str
+    district: str
+    region: str
+    shops_with_price: int
+    district_median: float | None
+    label: LabelInfo | None
+    cheapest_shops: list[ShopPrice]
+    history_scope: Literal["district", "region"]
+    history: list[WeekPoint]
+
+
 # ---------- Helpers ----------
 
 def check_district(district: str) -> str:
@@ -83,9 +128,9 @@ def check_district(district: str) -> str:
 def label_for(item_code: int, district: str, region: str):
     """District label if there is one, otherwise fall back to the region's."""
     for area, scope in [(district, "district"), (region, "region")]:
-        row = LABEL_BY_AREA.get((area, item_code))
+        row = LABEL_BY_AREA.get((scope, area, item_code))
         if row is not None:
-            return row.label, scope
+            return row, scope
     return None, None
 
 
@@ -156,15 +201,70 @@ def search_items(
         if it.item_code not in cheapest.index:
             continue  # no fresh price for this item in this district
         c = cheapest.loc[it.item_code]
-        label, scope = label_for(it.item_code, district, region)
+        row, scope = label_for(it.item_code, district, region)
         results.append((it.relevance, SearchResult(
             item_code=it.item_code, name=it.item, unit=it.unit, category=it.item_category,
             cheapest_price=round(float(c.price), 2), cheapest_shop=c.premise,
             cheapest_chain=c.chain, price_date=c.date.date(),
             shops_with_price=int(shop_counts[it.item_code]),
-            label=label, label_scope=scope,
+            label=row.label if row is not None else None, label_scope=scope,
         )))
 
     # Best name match first, then items sold in more shops (the staples people want).
     results.sort(key=lambda pair: (pair[0], -pair[1].shops_with_price, pair[1].name))
     return [r for _, r in results[:limit]]
+
+
+@app.get("/items/{item_code}", response_model=ItemDetail)
+def item_detail(
+    item_code: int,
+    district: str = Query(description="District from /areas, e.g. 'Petaling'"),
+):
+    """One item in one district: cheapest shops, price label and 6-month history."""
+    region = check_district(district)
+    match = items[items["item_code"] == item_code]
+    if match.empty:
+        raise HTTPException(404, f"Unknown item code {item_code}.")
+    it = match.iloc[0]
+
+    # Cheapest 5 shops with a fresh price in this district.
+    here = latest[(latest["district"] == district) & (latest["item_code"] == item_code)]
+    here = here.sort_values(["price", "premise"])
+    lowest = float(here["price"].min()) if not here.empty else None
+    cheapest_shops = [
+        ShopPrice(shop=r.premise, chain=r.chain, shop_type=r.premise_type,
+                  price=round(float(r.price), 2), price_date=r.date.date(),
+                  more_than_cheapest=round(float(r.price) - lowest, 2))
+        for r in here.head(5).itertuples()
+    ]
+
+    # Label, with the usual range so the app can say "usually RM 8.54 to 9.29".
+    row, scope = label_for(item_code, district, region)
+    label = None if row is None else LabelInfo(
+        label=row.label, scope=scope, week=row.week.date(),
+        weekly_price=round(float(row.price), 2),
+        usual_low=float(row.usual_low), usual_high=float(row.usual_high),
+        shops=int(row.n_stores), history_weeks=int(row.history_weeks),
+    )
+
+    # Weekly history for the chart: the district if it has enough weeks, else the region.
+    def series(area_type, area):
+        return weekly[(weekly["area_type"] == area_type) & (weekly["area"] == area)
+                      & (weekly["item_code"] == item_code)].sort_values("week")
+
+    history, history_scope = series("district", district), "district"
+    if len(history) < HISTORY_MIN_WEEKS:
+        history, history_scope = series("region", region), "region"
+
+    return ItemDetail(
+        item_code=item_code, name=it["item"], unit=it["unit"],
+        category=it["item_category"], group=it["item_group"],
+        district=district, region=region,
+        shops_with_price=int(here["premise_code"].nunique()),
+        district_median=round(float(here["price"].median()), 2) if not here.empty else None,
+        label=label,
+        cheapest_shops=cheapest_shops,
+        history_scope=history_scope,
+        history=[WeekPoint(week=r.week.date(), price=round(float(r.price), 2), shops=int(r.n_stores))
+                 for r in history.itertuples()],
+    )
