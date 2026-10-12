@@ -101,6 +101,7 @@ class SearchResult(BaseModel):
     name: str
     unit: str
     category: str
+    category_en: str | None = None
     # All None (and shops_with_price 0) when no shop in the district has a fresh price.
     cheapest_price: float | None
     cheapest_shop: str | None
@@ -111,6 +112,19 @@ class SearchResult(BaseModel):
     label: Label | None
     label_scope: Literal["district", "region"] | None
 
+class Category(BaseModel):
+    category: str
+    category_en: str | None
+    items: int = Field(description="Items PriceCatcher tracks in this category")
+    priced: int = Field(description="Of those, items with a fresh price in the district")
+
+
+class Group(BaseModel):
+    group: str
+    group_en: str | None
+    items: int
+    priced: int
+    categories: list[Category]
 
 class LabelInfo(BaseModel):
     label: Label
@@ -308,16 +322,25 @@ def search_items(
         for name in found["item"]
     ]
 
+    return results_for(found, district, region)[:limit]
+
+
+def results_for(found, district, region):
+    """Cheapest fresh price in the district for each item in `found`.
+
+    `found` needs a `relevance` column (0 = best). Items with a price come
+    first, then by relevance, then items sold in more shops (the staples).
+    Items without a fresh price here are kept at the end, so the user knows why.
+    """
     here = latest[(latest["district"] == district) & latest["item_code"].isin(found["item_code"])]
     cheapest = here.loc[here.groupby("item_code")["price"].idxmin()].set_index("item_code")
     shop_counts = here.groupby("item_code")["premise_code"].nunique()
 
     results = []
     for it in found.itertuples():
-        base = dict(item_code=it.item_code, name=it.item, unit=it.unit, category=it.item_category)
+        base = dict(item_code=it.item_code, name=it.item, unit=it.unit, category=it.item_category,
+            category_en=None if pd.isna(it.category_en) else it.category_en)
         if it.item_code not in cheapest.index:
-            # Tracked by PriceCatcher, but no shop here has a fresh price:
-            # still listed, after the priced items, so the user knows why.
             results.append(((1, it.relevance), SearchResult(
                 **base, cheapest_price=None, cheapest_shop=None, cheapest_chain=None,
                 price_date=None, shops_with_price=0,
@@ -332,9 +355,45 @@ def search_items(
             label=row.label if row is not None else None, label_scope=scope,
         )))
 
-    # Priced items first; then best name match, then items sold in more shops.
     results.sort(key=lambda pair: (pair[0], -pair[1].shops_with_price, pair[1].name))
-    return [r for _, r in results[:limit]]
+    return [r for _, r in results]
+
+
+@app.get("/categories", response_model=list[Group])
+def categories(district: str = Query(description="District from /areas, e.g. 'Petaling'")):
+    """Every item group and category PriceCatcher tracks, with how many items
+    have a fresh price in the district. Groups with the most priced items first."""
+    check_district(district)
+    priced_here = set(latest.loc[latest["district"] == district, "item_code"])
+    it = items.assign(priced=items["item_code"].isin(priced_here))
+
+    groups = []
+    for group, g in it.groupby("item_group"):
+        cats = (g.groupby(["item_category"])
+                 .agg(items=("item_code", "size"), priced=("priced", "sum"),
+                      category_en=("category_en", "first"))
+                 .reset_index()
+                 .sort_values(["priced", "item_category"], ascending=[False, True]))
+        group_en = g["group_en"].iloc[0]
+        groups.append(Group(
+            group=group, group_en=None if pd.isna(group_en) else group_en, items=len(g), priced=int(g["priced"].sum()),
+            categories=[Category(category=c.item_category, items=int(c.items), priced=int(c.priced),
+                                 category_en=None if pd.isna(c.category_en) else c.category_en)
+                        for c in cats.itertuples()]))
+    return sorted(groups, key=lambda g: (-g.priced, g.group))
+
+
+@app.get("/browse", response_model=list[SearchResult])
+def browse(
+    district: str = Query(description="District from /areas, e.g. 'Petaling'"),
+    category: str = Query(description="Category from /categories, e.g. 'AYAM'"),
+):
+    """All items in one category with their cheapest fresh price in the district."""
+    region = check_district(district)
+    found = items[items["item_category"] == category].assign(relevance=0)
+    if found.empty:
+        raise HTTPException(404, f"Unknown category {category!r}.")
+    return results_for(found, district, region)
 
 @app.get("/items/{item_code}/prices", response_model=list[ShopLocated])
 def item_prices(item_code: int):

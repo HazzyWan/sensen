@@ -52,6 +52,8 @@ function readRoute() {
   const item = h.match(/^#\/item\/(\d+)$/)
   if (item) return { view: 'item', code: Number(item[1]) }
   if (h === '#/basket') return { view: 'basket' }
+  const browse = h.match(/^#\/browse(?:\/(.+))?$/)
+  if (browse) return { view: 'browse', category: browse[1] ? decodeURIComponent(browse[1]) : null }
   return { view: 'home' }
 }
 
@@ -65,6 +67,7 @@ export function useRoute() {
   const go = {
     item: (c) => { window.location.hash = `/item/${c}` },
     basket: () => { window.location.hash = '/basket' },
+    browse: (category) => { window.location.hash = category ? `/browse/${encodeURIComponent(category)}` : '/browse' },
     home: () => { window.location.hash = '' },
   }
   return [route, go]

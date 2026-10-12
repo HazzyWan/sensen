@@ -2,9 +2,12 @@
 
 Reads data/clean/prices.parquet (and the shop addresses in data/raw/) and
 writes to data/serve/:
-  items.parquet          one row per item, with English search words
+  items.parquet          every PriceCatcher item (except cooked food), with
+                         English search words, even if no shop here prices it
   latest_prices.parquet  each shop's latest price per item, if fresh
   areas.parquet          each district's main towns, for the district picker
+  shops.parquet          each shop's name, chain, address and map position
+                         (from pipeline/geocache.csv, made by geocode.py)
 
 "Fresh" is measured from the newest date in the data, not from today,
 because PriceCatcher is published with a delay.
@@ -17,6 +20,7 @@ import re
 from pathlib import Path
 
 import pandas as pd
+
 from clean import load_items, tidy  # same item list and cooked-food rule as clean.py
 
 CLEAN_DIR = Path("data/clean")
@@ -54,6 +58,7 @@ def current_name(name):
         name = pattern.sub(new, name)
     return name
 
+
 # Malay words in item names -> English, so "chicken" finds AYAM.
 ENGLISH = {
     "AYAM": "chicken", "TELUR": "egg eggs", "BERAS": "rice", "DAGING": "meat",
@@ -72,10 +77,11 @@ ENGLISH = {
     "TAUHU": "tofu", "ANGGUR": "grapes", "NENAS": "pineapple",
     "TEMBIKAI": "watermelon", "BENDI": "okra ladies fingers", "BUNCIS": "french beans",
     "TOMATO": "tomato", "BROKOLI": "broccoli", "ROTI": "bread loaf",
-    "GANDUM": "wheat wholemeal", "BIJIRIN": "cereal", "BISKUT": "biscuit",
+    "GANDUM": "wheat wholemeal", "BISKUT": "biscuit",
     "AIR": "water", "JUS": "juice", "SERBUK": "powder",
     "MARJERIN": "margarine", "MAJERIN": "margarine",
     "PENCUCI": "detergent washing", "DETERGEN": "detergent",
+    "MINUMAN": "drinks", "SAPUAN": "spreads", "BIJIRIN": "cereal",
 }
 
 
@@ -86,10 +92,66 @@ def chain_of(name, premise_type):
     return premise_type  # independents are grouped by shop type
 
 
+# English names for PriceCatcher's item groups and categories, for the Browse
+# screen and for search ("instant noodles" finds MI SEGERA).
+GROUP_EN = {
+    "BARANGAN SEGAR": "Fresh food",
+    "BARANGAN KERING": "Dry goods",
+    "BARANGAN BERBUNGKUS": "Packaged food",
+    "MINUMAN": "Drinks",
+    "SUSU DAN BARANGAN BAYI": "Baby milk and baby care",
+    "PRODUK KEBERSIHAN": "Cleaning and personal care",
+    "BARANGAN KEDAI SERBANEKA": "Convenience store items",
+}
+CATEGORY_EN = {
+    # Fresh food
+    "SAYUR-SAYURAN": "Vegetables", "BAHAN LAUT": "Seafood", "DAGING": "Meat",
+    "BUAH-BUAHAN": "Fruit", "TELUR": "Eggs", "AYAM": "Chicken", "KELAPA": "Coconut",
+    "IKAN DARAT": "Freshwater fish", "MEE/KUETIAU": "Fresh noodles", "TAUHU DAN TEMPE": "Tofu and tempeh",
+    # Dry goods
+    "BAWANG": "Onions and garlic", "KACANG": "Beans and nuts", "UBI KENTANG": "Potatoes",
+    "HASIL LAUT KERING": "Dried seafood", "CILI KERING": "Dried chillies",
+    # Packaged food
+    "MINYAK DAN LEMAK": "Cooking oil and fats", "REMPAH RATUS (BERBUNGKUS)": "Spices (packed)",
+    "REMPAH RATUS (TIDAK BERBUNGKUS)": "Spices (loose)", "KRIMER DAN SUSU TEPUNG": "Creamer and milk powder",
+    "BERAS": "Rice", "KICAP DAN SOS": "Soy sauce and sauces", "SAPUAN (SPREADS)": "Spreads",
+    "IKAN DALAM TIN": "Canned fish", "TEPUNG": "Flour", "BIHUN": "Rice vermicelli",
+    "ESEN DAN RAGI": "Essence and yeast", "GULA": "Sugar", "SANTAN (KOTAK)": "Coconut milk",
+    "MI SEGERA": "Instant noodles", "ROTI": "Bread", "MENTEGA": "Butter",
+    # Drinks
+    "TERSEDIA MINUM": "Ready to drink", "BAHAN-BAHAN MINUMAN": "Coffee, tea and drink mixes",
+    # Baby
+    "SUSU BAYI": "Infant formula", "LAMPIN PAKAI BUANG": "Diapers", "MAKANAN BAYI": "Baby food",
+    # Cleaning and personal care
+    "PENJAGAAN RUMAH": "Household cleaning", "PENJAGAAN DIRI": "Personal care",
+    # Convenience store items
+    "UBAT-UBATAN": "Medicine", "MINUMAN": "Drinks", "COKLAT": "Chocolate", "BISKUT": "Biscuits",
+    "MAKANAN RINGAN": "Snacks", "ALAT TULIS DAN BAHAN BACAAN": "Stationery and reading",
+    "MAKANAN SEGERA": "Instant food", "SYAMPU": "Shampoo", "MAJALAH": "Magazines",
+    "TUALA WANITA": "Sanitary pads", "BERUS GIGI": "Toothbrushes", "MOUTH WASH": "Mouthwash",
+    "PENGHALAU NYAMUK": "Mosquito repellent", "SABUN BADAN": "Body soap",
+    "PEWANGI RUMAH": "Air freshener", "TISU": "Tissue", "UBAT GIGI": "Toothpaste",
+}
+
+
+def category_en(category):
+    """English name for a category: from CATEGORY_EN, else from the keyword list.
+
+    None if nothing is known; the app then shows the Malay name.
+    """
+    if category in CATEGORY_EN:
+        return CATEGORY_EN[category]
+    for word in re.findall(r"[A-Z]+", str(category).upper()):
+        if word in ENGLISH:
+            return ENGLISH[word].split()[0].capitalize()
+    return None
+
+
 def search_text(row):
     words = re.findall(r"[A-Z]+", f"{row['item']} {row['item_category']}".upper())
     english = " ".join(ENGLISH.get(w, "") for w in words)
-    return f"{row['item']} {row['item_category']} {english}".lower()
+    category = category_en(row["item_category"]) or ""
+    return f"{row['item']} {row['item_category']} {english} {category}".lower()
 
 
 RAW_DIR = Path("data/raw")
@@ -140,6 +202,7 @@ def area_table(latest):
                      "towns": "|".join(towns[:TOWNS_PER_AREA])})
     return pd.DataFrame(rows)
 
+
 def shop_table(prices):
     """One row per shop: name, chain, type, area, address and map position.
 
@@ -162,6 +225,7 @@ def shop_table(prices):
     shops["precision"] = shops["precision"].fillna("none")
     return shops
 
+
 def main():
     SERVE_DIR.mkdir(parents=True, exist_ok=True)
     prices = pd.read_parquet(CLEAN_DIR / "prices.parquet")
@@ -172,6 +236,8 @@ def main():
     items = load_items()[["item_code", "item", "unit", "item_group", "item_category"]]
     items = items.drop_duplicates("item_code").reset_index(drop=True)
     items["search"] = items.apply(search_text, axis=1)
+    items["category_en"] = items["item_category"].map(category_en)
+    items["group_en"] = items["item_group"].map(GROUP_EN)
     items.to_parquet(SERVE_DIR / "items.parquet", index=False)
 
     # Latest reading per shop per item; median if a shop has several that day.
@@ -188,7 +254,7 @@ def main():
 
     areas = area_table(latest)
     areas.to_parquet(SERVE_DIR / "areas.parquet", index=False)
-    
+
     shops = shop_table(prices)
     shops.to_parquet(SERVE_DIR / "shops.parquet", index=False)
 
@@ -201,6 +267,11 @@ def main():
     located = shops["precision"].value_counts()
     print(f"Shops: {len(shops)}, map position by precision: "
           + ", ".join(f"{k} {v}" for k, v in located.items()))
+    print("Groups and categories (items tracked):")
+    for group, g in items.groupby("item_group"):
+        cats = g.groupby("item_category").size().sort_values(ascending=False)
+        print(f"  {group} = {GROUP_EN.get(group, '?')} ({len(g)}): " + ", ".join(
+            f"{c}{' = ' + category_en(c) if category_en(c) else ''} {n}" for c, n in cats.items()))
     print("Areas and their main towns:")
     for r in areas.itertuples():
         print(f"  {r.region:13} {r.district:16} {r.shops:>3} shops  {r.towns.replace('|', ', ')}")

@@ -15,7 +15,7 @@ function useDebounced(value, ms = 250) {
 }
 
 export function Results({ query, district, selected, onOpen }) {
-  const { t, lang } = useLang()
+  const { t } = useLang()
   const term = useDebounced(query.trim())
   const { data, error, loading } = useFetch(
     (signal) => (term.length >= 2 ? searchItems(term, district, signal) : Promise.resolve(null)),
@@ -27,10 +27,17 @@ export function Results({ query, district, selected, onOpen }) {
   if (loading && !data) return <p className="empty">{t('searching')}</p>
   if (!data?.length) return <p className="empty">{t('noResults', { q: term, d: district })}</p>
 
-    return (
+  return <ItemRows rows={data} district={district} selected={selected} onOpen={onOpen} />
+}
+
+// One row per item with its cheapest price here, or a greyed row when it has
+// no recent price. Used by search results and by Browse.
+export function ItemRows({ rows, district, selected, onOpen }) {
+  const { t, lang } = useLang()
+  return (
     <div className="list">
-      {data.map((r) => (r.cheapest_price == null ? (
-        // Tracked by PriceCatcher, but no shop in this area has a recent price.
+      {rows.map((r) => (r.cheapest_price == null ? (
+        // In PriceCatcher's list, but no recent price here (or anywhere we cover).
         <button key={r.item_code} className={`li nop ${selected === r.item_code ? 'on' : ''}`} onClick={() => onOpen(r.item_code)}>
           <span className="t">
             <b>{nice(r.name)}</b>

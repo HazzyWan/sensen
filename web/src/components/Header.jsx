@@ -3,25 +3,33 @@ import { useLang } from '../i18n'
 import { shortDate } from '../format'
 import { AreaPicker } from './AreaPicker'
 
-export function Header({ areas, district, onDistrict, query, onQuery, meta, wide, onBasket }) {
+export function Header({ areas, district, onDistrict, query, onQuery, meta, wide, tab, go }) {
   const { t, lang } = useLang()
   const week = meta && <span className="pill soft">{t('weekOf', { w: shortDate(meta.latest_week, lang) })}</span>
-  const basket = <BasketButton onClick={onBasket} />
+  const basket = <BasketButton onClick={go.basket} />
+  const home = tab === 'home'
+  // Laptop: Home and Browse sit next to the search box (the basket has its own button).
+  const nav = (
+    <nav className="topnav" aria-label={t('navAria')}>
+      <button aria-current={home ? 'page' : undefined} onClick={() => go.home()}>{t('navHome')}</button>
+      <button aria-current={tab === 'browse' ? 'page' : undefined} onClick={() => go.browse()}>{t('navBrowse')}</button>
+    </nav>
+  )
   return (
     <header className={wide ? 'topbar' : 'top'}>
       <div className="row between">
         <div className="row brand-row">
           {wide && <span className="brand">Sen<span>Sen</span></span>}
-                    {wide && <span className="beta">{t('beta')}</span>}
+          {wide && <span className="beta">{t('beta')}</span>}
           <AreaPicker areas={areas} value={district} onChange={onDistrict} />
           {wide && week}
         </div>
-        {!wide && <div className="row"><LangToggle />{district && basket}</div>}
+        {!wide && <LangToggle />}
       </div>
-      {!wide && <div className="row between"><h1 className="hello">{t('hello')}</h1></div>}
-      {!wide && week && <div>{week}</div>}
+      {!wide && home && <div className="row between"><h1 className="hello">{t('hello')}</h1></div>}
+      {!wide && home && week && <div>{week}</div>}
       {district && (wide
-        ? <div className="row search-row"><SearchBox value={query} onChange={onQuery} /><LangToggle />{basket}</div>
+        ? <div className="row search-row">{nav}<SearchBox value={query} onChange={onQuery} /><LangToggle />{basket}</div>
         : <SearchBox value={query} onChange={onQuery} />)}
     </header>
   )

@@ -115,6 +115,28 @@ def test_basket_rejects_bad_input(district):
                                         "item_codes": list(range(1, 32))}).status_code == 422
     assert client.post("/basket", json={"district": district,
                                         "item_codes": [999999]}).status_code == 404
+# ---------- browse by category ----------
+
+def test_categories_add_up(district):
+    groups = client.get("/categories", params={"district": district}).json()
+    assert groups, "there should be item groups"
+    for g in groups:
+        assert 0 <= g["priced"] <= g["items"]
+        assert sum(c["items"] for c in g["categories"]) == g["items"]
+
+
+def test_browse_one_category_priced_first(district):
+    groups = client.get("/categories", params={"district": district}).json()
+    category = groups[0]["categories"][0]["category"]  # the best-covered one
+    rows = client.get("/browse", params={"district": district, "category": category}).json()
+    assert rows and all(r["category"] == category for r in rows)
+    priced = [r["cheapest_price"] is not None for r in rows]
+    assert priced == sorted(priced, reverse=True)
+
+
+def test_browse_unknown_category_is_404(district):
+    r = client.get("/browse", params={"district": district, "category": "NOT A CATEGORY"})
+    assert r.status_code == 404
 
 # ---------- prices with map positions (for "near me") ----------
 

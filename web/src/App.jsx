@@ -8,6 +8,8 @@ import { Results } from './components/Results'
 import { Deals, Movers, Stores } from './components/Dashboard'
 import { ItemDetail } from './components/ItemDetail'
 import { Basket } from './components/Basket'
+import { Browse } from './components/Browse'
+import { TabBar } from './components/TabBar'
 
 const DISTRICT_KEY = 'sensen.district'
 
@@ -26,6 +28,21 @@ export default function App() {
   const online = useOnline()
   const item = route.view === 'item' ? route.code : null
 
+  // Which tab an item was opened from (so Back returns there), and the last
+  // category open in Browse (so it is still open after viewing an item).
+  // Updated while rendering when the route changes, React's pattern for
+  // "adjust state when a prop changes".
+  const [from, setFrom] = useState(route.view === 'item' ? 'home' : route.view)
+  const [browseCat, setBrowseCat] = useState(route.view === 'browse' ? route.category : null)
+  const [seenRoute, setSeenRoute] = useState(route)
+  if (route !== seenRoute) {
+    setSeenRoute(route)
+    if (route.view !== 'item') setFrom(route.view)
+    if (route.view === 'browse') setBrowseCat(route.category)
+  }
+  const tab = route.view === 'item' ? from : route.view
+  const back = () => (from === 'browse' ? go.browse(browseCat) : from === 'basket' ? go.basket() : go.home())
+
   // A saved district that no longer exists in the data is cleared.
   useEffect(() => {
     if (areas && district && !areas.some((a) => a.district === district)) setDistrict('')
@@ -37,9 +54,9 @@ export default function App() {
   const banner = !online && <div className="offline" role="status">{t('offline')}</div>
   const header = (
     <>{banner}<Header areas={areas ?? []} district={district} onDistrict={pickDistrict}
-      query={query} onQuery={setQuery} meta={meta} wide={wide} onBasket={go.basket} /></>
+      query={query} onQuery={setQuery} meta={meta} wide={wide} tab={tab} go={go} /></>
   )
-    const footer = (
+  const footer = (
     <footer className="note">
       <p>{t('footer')}</p>
       <p><a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">{t('osmCredit')}</a></p>
@@ -54,7 +71,7 @@ export default function App() {
   if (wide) {
     let main
     if (route.view === 'item') {
-      main = <ItemDetail key={item} code={item} district={district} onClose={go.home} wide />
+      main = <ItemDetail key={item} code={item} district={district} onClose={back} wide />
     } else if (route.view === 'basket') {
       main = <Basket district={district} onBack={go.home} onOpen={go.item} wide />
     } else {
@@ -79,7 +96,9 @@ export default function App() {
             <aside className="side">
               {query.trim()
                 ? <Results query={query} district={district} selected={item} onOpen={go.item} />
-                : <Deals district={district} selected={item} onOpen={go.item} limit={8} />}
+                : tab === 'browse'
+                  ? <Browse district={district} category={browseCat} onCategory={go.browse} selected={item} onOpen={go.item} />
+                  : <Deals district={district} selected={item} onOpen={go.item} limit={8} />}
             </aside>
             <main className="main">{main}{footer}</main>
           </div>
@@ -88,28 +107,33 @@ export default function App() {
     )
   }
 
-  // ---------- Phone: one screen at a time ----------
+  // ---------- Phone: one screen at a time, tabs at the bottom ----------
+  const tabbar = district && <TabBar tab={tab} go={go} />
   if (district && route.view === 'item') {
-    return <div className="app"><ItemDetail key={item} code={item} district={district} onClose={go.home} /></div>
+    return <div className="app"><ItemDetail key={item} code={item} district={district} onClose={back} /></div>
   }
   if (district && route.view === 'basket') {
-    return <div className="app"><Basket district={district} onBack={go.home} onOpen={go.item} /></div>
+    return <div className="app tabbed"><Basket district={district} onBack={go.home} onOpen={go.item} />{tabbar}</div>
   }
+  let body
+  if (!district) body = choose
+  else if (query.trim()) body = <Results query={query} district={district} onOpen={go.item} />
+  else if (route.view === 'browse') body = <Browse district={district} category={browseCat} onCategory={go.browse} onOpen={go.item} />
+  else body = (
+    <>
+      <Deals district={district} onOpen={go.item} limit={5} />
+      <Movers district={district} onOpen={go.item} />
+      <Stores district={district} limit={5} />
+    </>
+  )
   return (
-    <div className="app">
+    <div className={`app ${district ? 'tabbed' : ''}`}>
       <main className="screen">
         {header}
-        {!district ? choose : query.trim()
-          ? <Results query={query} district={district} onOpen={go.item} />
-          : (
-            <>
-              <Deals district={district} onOpen={go.item} limit={5} />
-              <Movers district={district} onOpen={go.item} />
-              <Stores district={district} limit={5} />
-            </>
-          )}
+        {body}
         {footer}
       </main>
+      {tabbar}
     </div>
   )
 }
