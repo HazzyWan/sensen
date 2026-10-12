@@ -1,4 +1,4 @@
-"""Run the whole data pipeline in order: download -> clean -> weekly.
+"""Run the whole data pipeline in order: download -> clean -> weekly -> publish.
 
 This is the one command the monthly refresh will call later.
 
@@ -9,7 +9,7 @@ Run from the repo root:
 import subprocess
 import sys
 
-STEPS = ["download", "clean", "weekly"]
+STEPS = ["download", "clean", "weekly", "publish"]
 
 for step in STEPS:
     print(f"\n===== {step}.py =====")
