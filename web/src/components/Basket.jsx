@@ -1,5 +1,5 @@
 import { compareBasket } from '../api'
-import { useBasket } from '../basket'
+import { useBasket } from '../BasketContext'
 import { useFetch } from '../hooks'
 import { nice, rm, unitText } from '../format'
 

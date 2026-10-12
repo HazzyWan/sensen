@@ -112,6 +112,15 @@ def test_basket_rejects_bad_input(district):
                                         "item_codes": [999999]}).status_code == 404
 
 
+# ---------- areas ----------
+
+def test_areas_have_town_hints():
+    areas = client.get("/areas").json()
+    assert all(isinstance(a["towns"], list) for a in areas)
+    # A district never lists itself as its own town hint.
+    assert all(a["district"].lower() not in [t.lower() for t in a["towns"]] for a in areas)
+
+
 # ---------- movers and deals ----------
 
 def test_movers_split_into_rises_and_falls(district):

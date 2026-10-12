@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useWidth } from '../hooks'
-import { rm, shortDate } from '../format'
+import { useLang } from '../i18n'
+import { monthName, rm, shortDate } from '../format'
 
 const H = 200
 const PAD = { top: 14, right: 14, bottom: 26, left: 46 }
@@ -17,6 +18,7 @@ function ticks(lo, hi, count = 4) {
 
 /** Weekly price line, with the item's usual range shaded behind it. */
 export function PriceChart({ history, band }) {
+  const { t, lang } = useLang()
   const [ref, width] = useWidth()
   const [hover, setHover] = useState(null)
 
@@ -53,21 +55,21 @@ export function PriceChart({ history, band }) {
       {width > 0 && (
         <svg width={width} height={H} role="img" aria-label={summary}
           onPointerMove={onMove} onPointerLeave={() => setHover(null)}>
-          {ticks(lo, hi).map((t) => (
-            <g key={t}>
-              <line x1={PAD.left} x2={width - PAD.right} y1={y(t)} y2={y(t)} className="grid" />
-              <text x={PAD.left - 8} y={y(t) + 4} textAnchor="end" className="axis">{t.toFixed(2)}</text>
+          {ticks(lo, hi).map((v) => (
+            <g key={v}>
+              <line x1={PAD.left} x2={width - PAD.right} y1={y(v)} y2={y(v)} className="grid" />
+              <text x={PAD.left - 8} y={y(v) + 4} textAnchor="end" className="axis">{v.toFixed(2)}</text>
             </g>
           ))}
           {months.map(({ i, m }) => (
             <text key={m} x={x(i)} y={H - 6} textAnchor="middle" className="axis">
-              {new Date(m + '-01T00:00:00').toLocaleDateString('en-MY', { month: 'short' })}
+              {monthName(m + '-01', lang)}
             </text>
           ))}
           {band && (
             <g>
               <rect x={PAD.left} width={innerW} y={y(band.high)} height={Math.max(1, y(band.low) - y(band.high))} className="band" />
-              <text x={width - PAD.right - 4} y={y(band.high) - 5} textAnchor="end" className="axis">usual range</text>
+              <text x={width - PAD.right - 4} y={y(band.high) - 5} textAnchor="end" className="axis">{t('usualRange')}</text>
             </g>
           )}
           <path d={path} className="line" />
@@ -76,7 +78,7 @@ export function PriceChart({ history, band }) {
         </svg>
       )}
       <p className="chart-read">
-        <b>{rm(history[shown].price)}</b> week of {shortDate(history[shown].week)} · {history[shown].shops} shops
+        {t('chartRead', { p: rm(history[shown].price), w: shortDate(history[shown].week, lang), n: history[shown].shops })}
       </p>
     </div>
   )

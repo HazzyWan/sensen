@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { getAreas, getMeta } from './api'
 import { useFetch, useRoute, useWide } from './hooks'
 import { shortDate } from './format'
+import { useLang } from './i18n'
 import { Header } from './components/Header'
 import { Results } from './components/Results'
 import { Deals, Movers, Stores } from './components/Dashboard'
@@ -15,6 +16,7 @@ const loadDistrict = () => { try { return localStorage.getItem(DISTRICT_KEY) ?? 
 const saveDistrict = (d) => { try { localStorage.setItem(DISTRICT_KEY, d) } catch { /* still works, just not remembered */ } }
 
 export default function App() {
+  const { t, lang } = useLang()
   const wide = useWide(900)
   const meta = useFetch((s) => getMeta(s), []).data
   const { data: areas, error } = useFetch((s) => getAreas(s), [])
@@ -35,10 +37,10 @@ export default function App() {
     <Header areas={areas ?? []} district={district} onDistrict={pickDistrict}
       query={query} onQuery={setQuery} meta={meta} wide={wide} onBasket={go.basket} />
   )
-  const footer = <p className="note">Prices from PriceCatcher by KPDN and DOSM (CC BY 4.0), checked in person by officers.</p>
+  const footer = <p className="note">{t('footer')}</p>
 
-  if (error) return <div className="app"><main className="screen">{header}<p className="empty">Could not reach the API: {error}</p></main></div>
-  const choose = <p className="empty">Pick your district above to see prices near you.</p>
+  if (error) return <div className="app"><main className="screen">{header}<p className="empty">{t('apiError', { e: error })}</p></main></div>
+  const choose = <p className="empty">{t('choose')}</p>
 
   // ---------- Laptop: list on the left, detail / basket / overview on the right ----------
   if (wide) {
@@ -51,10 +53,9 @@ export default function App() {
       main = (
         <div className="screen">
           <div className="overview-head">
-            <h1>Grocery prices in {district}</h1>
+            <h1>{t('overviewTitle', { d: district })}</h1>
             <p className="muted">
-              {shops} shops checked{meta ? ` · week of ${shortDate(meta.latest_week)}` : ''}.
-              Search on the left, or pick an item to see its price history.
+              {t('overviewSub', { n: shops, w: meta ? shortDate(meta.latest_week, lang) : '…' })}
             </p>
           </div>
           <Movers district={district} onOpen={go.item} columns />

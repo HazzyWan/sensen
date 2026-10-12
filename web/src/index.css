@@ -46,9 +46,19 @@ p { margin: 0; }
 .sechead { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; }
 .sechead h2 { font-size: 18px; font-weight: 700; }
 
-.loc { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; font-size: 14px; }
+.loc { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; font-size: 14px; min-width: 0; }
 .loc svg { width: 16px; height: 16px; color: var(--brand); flex: none; }
-.loc select { font: inherit; color: var(--ink); background: transparent; border: 0; padding: 4px 0; cursor: pointer; }
+/* The real <select> is invisible and covers the label, so tapping opens the native picker. */
+.loc-text { position: relative; display: grid; min-width: 0; border-radius: 8px; }
+.loc-text:focus-within { outline: 3px solid color-mix(in srgb, var(--brand) 60%, transparent); outline-offset: 2px; }
+.loc-name { white-space: nowrap; }
+.loc-hint { font-size: 11.5px; font-weight: 600; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.loc select { position: absolute; inset: 0; width: 100%; opacity: 0; cursor: pointer; font: inherit; }
+
+/* EN | BM switch */
+.lang { display: inline-flex; background: var(--soft); border-radius: 12px; padding: 3px; flex: none; }
+.lang button { padding: 5px 9px; border-radius: 9px; font-size: 12.5px; font-weight: 800; color: var(--muted); }
+.lang button[aria-pressed="true"] { background: var(--card); color: var(--ink); box-shadow: var(--shadow); }
 
 .search { position: relative; display: block; }
 .search svg { position: absolute; left: 16px; top: 50%; translate: 0 -50%; width: 20px; height: 20px; color: var(--muted); pointer-events: none; }
@@ -82,8 +92,8 @@ p { margin: 0; }
 .mrow:hover b { color: var(--brand); }
 
 /* Store ranking: a bar either side of "usual" */
-.srank { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(60px, 1fr) 104px; gap: 12px; align-items: center; padding: 6px 0; }
-.srank .v { text-align: right; font-size: 13px; font-weight: 700; }
+.srank { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(60px, 1fr) auto; gap: 12px; align-items: center; padding: 6px 0; }
+.srank .v { text-align: right; font-size: 13px; font-weight: 700; white-space: nowrap; }
 @media (max-width: 600px) {
   /* Phone: name and % on one line, the bar underneath across the full width */
   .srank { grid-template-columns: minmax(0, 1fr) auto; row-gap: 6px; padding: 8px 0; border-top: 1px solid var(--line); }

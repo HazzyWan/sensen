@@ -1,8 +1,10 @@
 """Build the small tables the API serves.
 
-Reads data/clean/prices.parquet and writes to data/serve/:
+Reads data/clean/prices.parquet (and the shop addresses in data/raw/) and
+writes to data/serve/:
   items.parquet          one row per item, with English search words
   latest_prices.parquet  each shop's latest price per item, if fresh
+  areas.parquet          each district's main towns, for the district picker
 
 "Fresh" is measured from the newest date in the data, not from today,
 because PriceCatcher is published with a delay.
@@ -71,6 +73,54 @@ def search_text(row):
     return f"{row['item']} {row['item_category']} {english}".lower()
 
 
+RAW_DIR = Path("data/raw")
+
+# Malaysian addresses end with "<postcode> <TOWN>, <STATE>". We read the town
+# after the 5-digit postcode, e.g. "... 40150 SHAH ALAM, SELANGOR" -> "Shah Alam".
+POSTCODE_TOWN = re.compile(r"\b\d{5}\s*,?\s*([A-Z][A-Z .'/-]*?)\s*(?:,|$)")
+STATE_WORDS = re.compile(r"\s+(SELANGOR|W\.?P\.?\s*KUALA LUMPUR|WILAYAH PERSEKUTUAN.*)$")
+NOT_A_HINT = {"KUALA LUMPUR", "SELANGOR"}  # says nothing new about where in the area
+TOWNS_PER_AREA = 6  # the picker shows 3 and searches all 6
+
+
+def town_of(address):
+    m = POSTCODE_TOWN.search(str(address).upper())
+    if not m:
+        return None
+    raw = m.group(1).strip(" .")
+    town = STATE_WORDS.sub("", raw).strip(" .")
+    # "KUALA SELANGOR" is a town, not "KUALA" + the state name.
+    if town == "KUALA":
+        town = raw
+    return None if not town or town in NOT_A_HINT else town.title()
+
+
+def same_town(name):
+    """Treat spelling variants as one town: 'Kuala Kubu Baru' = 'Kuala Kubu Bharu'."""
+    return name.upper().replace("BHARU", "BARU").replace("TANJUNG", "TANJONG")
+
+
+def area_table(latest):
+    """One row per district: region, shop count and its most common towns."""
+    shops = latest[["premise_code", "district", "region"]].drop_duplicates("premise_code")
+    premises = pd.read_parquet(RAW_DIR / "lookup_premise.parquet")[["premise_code", "address"]]
+    shops = shops.merge(premises, on="premise_code", how="left")
+    shops["town"] = shops["address"].map(town_of)
+
+    rows = []
+    for (district, region), g in shops.groupby(["district", "region"]):
+        named = g.dropna(subset=["town"]).copy()
+        named["key"] = named["town"].map(same_town)
+        # Count each town once across spellings; show its most common spelling.
+        counts = named.groupby("key").agg(n=("town", "size"), name=("town", lambda s: s.mode()[0]))
+        counts = counts.sort_values("n", ascending=False)
+        towns = [r.name for r in counts.itertuples()
+                 if r.n >= 2 and r.Index != same_town(district)]
+        rows.append({"district": district, "region": region, "shops": len(g),
+                     "towns": "|".join(towns[:TOWNS_PER_AREA])})
+    return pd.DataFrame(rows)
+
+
 def main():
     SERVE_DIR.mkdir(parents=True, exist_ok=True)
     prices = pd.read_parquet(CLEAN_DIR / "prices.parquet")
@@ -91,11 +141,17 @@ def main():
     latest["chain"] = [chain_of(n, t) for n, t in zip(latest["premise"], latest["premise_type"])]
     latest.to_parquet(SERVE_DIR / "latest_prices.parquet", index=False)
 
+    areas = area_table(latest)
+    areas.to_parquet(SERVE_DIR / "areas.parquet", index=False)
+
     print(f"Items: {len(items)}")
     print(f"Data runs to {last_date.date()}; fresh = on or after "
           f"{(last_date - pd.Timedelta(days=FRESH_DAYS - 1)).date()}")
     print(f"Fresh shop prices: {len(latest):,} "
           f"({latest['premise_code'].nunique()} shops, {latest['item_code'].nunique()} items)")
+    print("Areas and their main towns:")
+    for r in areas.itertuples():
+        print(f"  {r.region:13} {r.district:16} {r.shops:>3} shops  {r.towns.replace('|', ', ')}")
     print("Shops per chain:")
     print(latest.groupby("chain")["premise_code"].nunique()
           .sort_values(ascending=False).to_string())

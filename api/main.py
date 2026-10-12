@@ -41,6 +41,7 @@ labels = pd.read_parquet(CLEAN_DIR / "labels.parquet")
 items = pd.read_parquet(SERVE_DIR / "items.parquet")
 latest = pd.read_parquet(SERVE_DIR / "latest_prices.parquet")
 movers = pd.read_parquet(CLEAN_DIR / "movers.parquet")
+area_rows = pd.read_parquet(SERVE_DIR / "areas.parquet").sort_values(["region", "district"])
 
 # district -> region, e.g. "Petaling" -> "Selangor"
 DISTRICT_REGION = (latest[["district", "region"]].drop_duplicates()
@@ -76,6 +77,7 @@ class Area(BaseModel):
     district: str
     region: str
     shops: int
+    towns: list[str] = Field(description="Main towns in the area, from shop addresses")
 
 
 class SearchResult(BaseModel):
@@ -245,10 +247,9 @@ def meta():
 @app.get("/areas", response_model=list[Area])
 def areas():
     """Districts the app can show, for the district picker."""
-    counts = latest.groupby(["district", "region"])["premise_code"].nunique().reset_index()
-    counts = counts.sort_values(["region", "district"])
-    return [Area(district=r.district, region=r.region, shops=r.premise_code)
-            for r in counts.itertuples()]
+    return [Area(district=r.district, region=r.region, shops=int(r.shops),
+                 towns=[t for t in r.towns.split("|") if t])
+            for r in area_rows.itertuples()]
 
 
 @app.get("/items/search", response_model=list[SearchResult])
