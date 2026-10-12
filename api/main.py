@@ -15,8 +15,14 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-CLEAN_DIR = Path("data/clean")
-SERVE_DIR = Path("data/serve")
+import os
+import re
+from datetime import date
+
+# The API reads its own copy of the tables (made by pipeline/ship.py), found
+# next to this file. That way it works from any folder, and api/ can be
+# deployed on its own.
+DATA_DIR = Path(__file__).parent / "data"
 
 app = FastAPI(
     title="SenSen API",
@@ -26,22 +32,26 @@ app = FastAPI(
 
 # The app runs on a different address (port 5173) from the API (port 8000), so the
 # browser blocks its requests unless the API says that address is allowed.
-# The live app's address gets added here in M4.
+# The live app's address comes from the SENSEN_WEB_ORIGINS setting on the host
+# (comma-separated), so it can change without touching the code.
+LOCAL_ORIGINS = ["http://localhost:5173", "http://127.0.0.1:5173"]
+WEB_ORIGINS = [o.strip() for o in os.environ.get("SENSEN_WEB_ORIGINS", "").split(",") if o.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=LOCAL_ORIGINS + WEB_ORIGINS,
     allow_methods=["GET", "POST"],
     allow_headers=["Content-Type"],
 )
 
 # ---------- Data, loaded once when the server starts ----------
 
-weekly = pd.read_parquet(CLEAN_DIR / "weekly.parquet")
-labels = pd.read_parquet(CLEAN_DIR / "labels.parquet")
-items = pd.read_parquet(SERVE_DIR / "items.parquet")
-latest = pd.read_parquet(SERVE_DIR / "latest_prices.parquet")
-movers = pd.read_parquet(CLEAN_DIR / "movers.parquet")
-area_rows = pd.read_parquet(SERVE_DIR / "areas.parquet").sort_values(["region", "district"])
+weekly = pd.read_parquet(DATA_DIR / "weekly.parquet")
+labels = pd.read_parquet(DATA_DIR / "labels.parquet")
+items = pd.read_parquet(DATA_DIR / "items.parquet")
+latest = pd.read_parquet(DATA_DIR / "latest_prices.parquet")
+movers = pd.read_parquet(DATA_DIR / "movers.parquet")
+area_rows = pd.read_parquet(DATA_DIR / "areas.parquet").sort_values(["region", "district"])
 
 # district -> region, e.g. "Petaling" -> "Selangor"
 DISTRICT_REGION = (latest[["district", "region"]].drop_duplicates()

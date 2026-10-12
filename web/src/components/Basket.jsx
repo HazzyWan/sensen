@@ -1,9 +1,11 @@
 import { compareBasket } from '../api'
 import { useBasket } from '../BasketContext'
 import { useFetch } from '../hooks'
+import { useLang } from '../i18n'
 import { nice, rm, unitText } from '../format'
 
 export function Basket({ district, onBack, onOpen, wide }) {
+  const { t } = useLang()
   const { items, remove, clear } = useBasket()
   const codes = items.map((i) => i.code)
 
@@ -20,27 +22,27 @@ export function Basket({ district, onBack, onOpen, wide }) {
   return (
     <div className="detail">
       {wide ? (
-        <div className="detail-head"><button className="backlink" onClick={onBack}>{arrow}Overview of {district}</button></div>
+        <div className="detail-head"><button className="backlink" onClick={onBack}>{arrow}{t('overviewOf', { d: district })}</button></div>
       ) : (
-        <div className="bar"><button className="back" onClick={onBack} aria-label="Back">{arrow}</button><span className="ttl">My basket</span></div>
+        <div className="bar"><button className="back" onClick={onBack} aria-label={t('back')}>{arrow}</button><span className="ttl">{t('myBasket')}</span></div>
       )}
 
       <div className="screen">
         <section className="sec">
           <div className="sechead">
-            <h2>{wide ? 'My basket' : `${items.length} item${items.length === 1 ? '' : 's'}`}</h2>
-            {items.length > 0 && <button className="linkbtn" onClick={clear}>Clear all</button>}
+            <h2>{wide ? t('myBasket') : t('itemCount', { n: items.length })}</h2>
+            {items.length > 0 && <button className="linkbtn" onClick={clear}>{t('clearAll')}</button>}
           </div>
           {items.length === 0 ? (
-            <p className="empty">Your basket is empty. Open any item and tap “Add to basket”.</p>
+            <p className="empty">{t('basketEmpty')}</p>
           ) : (
             <div className="list">
               {items.map((i) => (
                 <div key={i.code} className="li">
                   <button className="t" onClick={() => onOpen(i.code)}>
-                    <b>{nice(i.name)}</b><span>{unitText(i.unit)}</span>
+                    <b>{nice(i.name)}</b><span>{unitText(i.unit, t)}</span>
                   </button>
-                  <button className="remove" onClick={() => remove(i.code)} aria-label={`Remove ${nice(i.name)}`}>×</button>
+                  <button className="remove" onClick={() => remove(i.code)} aria-label={t('removeAria', { x: nice(i.name) })}>×</button>
                 </div>
               ))}
             </div>
@@ -48,7 +50,7 @@ export function Basket({ district, onBack, onOpen, wide }) {
         </section>
 
         {error && <p className="empty">{error}</p>}
-        {loading && !data && items.length > 0 && <p className="empty">Comparing shops…</p>}
+        {loading && !data && items.length > 0 && <p className="empty">{t('comparing')}</p>}
         {data && <Comparison data={data} district={district} />}
       </div>
     </div>
@@ -56,8 +58,9 @@ export function Basket({ district, onBack, onOpen, wide }) {
 }
 
 function Comparison({ data, district }) {
+  const { t } = useLang()
   const best = data.shops[0]
-  if (!best) return <p className="empty">No shop in {district} has recent prices for these items.</p>
+  if (!best) return <p className="empty">{t('noShop', { d: district })}</p>
 
   const n = data.items_requested
   const complete = data.shops.filter((s) => s.complete)
@@ -67,29 +70,26 @@ function Comparison({ data, district }) {
   return (
     <>
       <div className="winner">
-        <span className="lbl">{best.complete ? 'CHEAPEST SINGLE SHOP' : 'NO SHOP HAS EVERYTHING'}</span>
+        <span className="lbl">{best.complete ? t('cheapestSingle') : t('noneHasAll')}</span>
         <div className="row between wrap">
           <span className="st">{nice(best.shop)}</span>
           <span className="pp">{rm(best.total)}</span>
         </div>
         <span className="sv">
           {best.complete
-            ? `Has all ${n} items.`
-            : `Has ${best.items_found} of ${n}. Missing: ${best.missing.map(nice).join(', ')}.`}
+            ? t('hasAll', { n })
+            : t('hasSome', { f: best.items_found, n, m: best.missing.map(nice).join(', ') })}
         </span>
       </div>
 
       {mixSaving >= 0.5 && (
-        <p className="tip">
-          Buying each item wherever it is cheapest in {district} costs <b>{rm(data.cheapest_mix_total)}</b>,
-          saving <b>{rm(mixSaving)}</b> if you don't mind visiting more than one shop.
-        </p>
+        <p className="tip">{t('mixTip', { d: district, t: rm(data.cheapest_mix_total), s: rm(mixSaving) })}</p>
       )}
 
       <section className="sec">
         <div className="sechead">
-          <h2>All shops compared</h2>
-          <span className="muted small">{complete.length} of {data.shops.length} shown have everything</span>
+          <h2>{t('allCompared')}</h2>
+          <span className="muted small">{t('completeCount', { c: complete.length, n: data.shops.length })}</span>
         </div>
         <div className="list">
           {data.shops.map((s, k) => (
@@ -97,7 +97,7 @@ function Comparison({ data, district }) {
               <span className="rank">{k + 1}</span>
               <span className="t">
                 <b>{nice(s.shop)}</b>
-                <span>{s.complete ? `All ${n} items` : `Missing ${s.missing.length}: ${s.missing.map(nice).join(', ')}`}</span>
+                <span>{s.complete ? t('allItems', { n }) : t('missingN', { k: s.missing.length, m: s.missing.map(nice).join(', ') })}</span>
               </span>
               <span className="r">
                 <b>{rm(s.total)}</b>
@@ -106,7 +106,7 @@ function Comparison({ data, district }) {
             </div>
           ))}
         </div>
-        <p className="muted small">Shops missing items are listed after complete ones, so a lower total there isn't a cheaper trip.</p>
+        <p className="muted small">{t('missingNote')}</p>
       </section>
     </>
   )
