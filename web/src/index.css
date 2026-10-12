@@ -121,6 +121,22 @@ p { margin: 0; }
 .rank { width: 26px; height: 26px; border-radius: 9px; background: var(--soft); display: grid; place-items: center; font-weight: 800; font-size: 13px; color: var(--muted); }
 .srow .r span { font-size: 12px; }
 
+/* Buttons and basket */
+.btn { order: 10; width: 100%; text-align: center; padding: 12px 16px; border-radius: 14px; font-weight: 800; background: var(--brand); color: var(--brand-ink); }
+.btn:hover { filter: brightness(1.05); }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+.btn.ghost { background: var(--save-soft); color: var(--save); }
+.linkbtn { font-size: 13.5px; font-weight: 700; color: var(--brand); }
+.remove { width: 32px; height: 32px; border-radius: 10px; background: var(--soft); color: var(--muted); font-size: 20px; line-height: 1; text-align: center; }
+.remove:hover { color: var(--dear); }
+.li > button.t { text-align: left; }
+.basket-btn { position: relative; width: 40px; height: 40px; border-radius: 14px; background: var(--soft); display: grid; place-items: center; flex: none; }
+.basket-btn svg { width: 22px; height: 22px; }
+.basket-btn:hover { color: var(--brand); }
+.basket-btn .count { position: absolute; top: -5px; right: -5px; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 99px; background: var(--brand); color: var(--brand-ink); font-size: 11.5px; font-weight: 800; display: grid; place-items: center; }
+.tip { background: var(--save-soft); color: var(--ink); border-radius: 16px; padding: 12px 14px; font-size: 14px; }
+.tip b { color: var(--save); }
+
 /* Chart */
 .chart { display: grid; gap: 6px; }
 .chart svg { display: block; touch-action: pan-y; }
@@ -145,6 +161,8 @@ p { margin: 0; }
 .brand { font-family: var(--f-display); font-weight: 800; font-size: 22px; letter-spacing: -.03em; }
 .brand span { color: var(--brand); }
 .topbar .search input { padding-block: 11px; box-shadow: none; }
+.search-row { gap: 12px; }
+.search-row .search { flex: 1; }
 .desk-grid {
   display: grid; grid-template-columns: minmax(320px, 400px) minmax(0, 1fr); gap: 24px;
   max-width: 1240px; margin: 0 auto; padding: 24px;
@@ -163,5 +181,5 @@ p { margin: 0; }
 .main .detail .screen { padding-top: 12px; }
 @media (min-width: 900px) {
   .main .phero { grid-template-columns: 1fr 1fr; align-items: start; }
-  .main .phero > .crumb, .main .phero > h1 { grid-column: 1 / -1; }
+  .main .phero > .crumb, .main .phero > h1, .main .phero > .btn { grid-column: 1 / -1; }
 }

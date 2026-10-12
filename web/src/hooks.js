@@ -29,22 +29,29 @@ export function useWide(px = 900) {
   return wide
 }
 
-// The item shown is kept in the URL (#/item/12), so the phone's back button
-// works and a link to an item can be shared.
-export function useItemRoute() {
-  const read = () => {
-    const m = window.location.hash.match(/^#\/item\/(\d+)$/)
-    return m ? Number(m[1]) : null
-  }
-  const [code, setCode] = useState(read)
+// Which screen is open is kept in the URL (#/item/12, #/basket), so the phone's
+// back button works and a link to an item can be shared.
+function readRoute() {
+  const h = window.location.hash
+  const item = h.match(/^#\/item\/(\d+)$/)
+  if (item) return { view: 'item', code: Number(item[1]) }
+  if (h === '#/basket') return { view: 'basket' }
+  return { view: 'home' }
+}
+
+export function useRoute() {
+  const [route, setRoute] = useState(readRoute)
   useEffect(() => {
-    const onHash = () => setCode(read())
+    const onHash = () => setRoute(readRoute())
     window.addEventListener('hashchange', onHash)
     return () => window.removeEventListener('hashchange', onHash)
   }, [])
-  const open = (c) => { window.location.hash = `/item/${c}` }
-  const close = () => { window.location.hash = '' }
-  return [code, open, close]
+  const go = {
+    item: (c) => { window.location.hash = `/item/${c}` },
+    basket: () => { window.location.hash = '/basket' },
+    home: () => { window.location.hash = '' },
+  }
+  return [route, go]
 }
 
 // Width of an element in pixels, for charts that draw to fit their box.

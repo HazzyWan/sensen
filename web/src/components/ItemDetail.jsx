@@ -1,4 +1,5 @@
 import { getItem } from '../api'
+import { BASKET_MAX, useBasket } from '../basket'
 import { useFetch } from '../hooks'
 import { LABEL_CLASS, nice, rm, shortDate, unitText } from '../format'
 import { PriceChart } from './PriceChart'
@@ -11,6 +12,7 @@ const SENTENCE = {
 
 export function ItemDetail({ code, district, onClose, wide }) {
   const { data: d, error, loading } = useFetch((s) => getItem(code, district, s), [code, district])
+  const basket = useBasket()
 
   const arrow = (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7" /></svg>
@@ -56,6 +58,8 @@ export function ItemDetail({ code, district, onClose, wide }) {
             <p className="empty">No shop in {district} has a price from the last 2 weeks.</p>
           )}
 
+          <BasketToggle basket={basket} item={{ code: d.item_code, name: d.name, unit: d.unit }} />
+
           {d.label && (
             <div className="verdict">
               <span className={`pill ${LABEL_CLASS[d.label.label]}`}>{d.label.label}</span>
@@ -96,5 +100,21 @@ export function ItemDetail({ code, district, onClose, wide }) {
         )}
       </div>
     </div>
+  )
+}
+
+function BasketToggle({ basket, item }) {
+  if (basket.has(item.code)) {
+    return (
+      <button className="btn ghost" onClick={() => basket.remove(item.code)}>
+        ✓ In your basket · Remove
+      </button>
+    )
+  }
+  const full = basket.items.length >= BASKET_MAX
+  return (
+    <button className="btn" onClick={() => basket.add(item)} disabled={full}>
+      {full ? `Basket is full (${BASKET_MAX} items)` : '+ Add to basket'}
+    </button>
   )
 }

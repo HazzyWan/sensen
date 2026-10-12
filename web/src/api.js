@@ -13,10 +13,27 @@ async function get(path, params = {}, signal) {
   return res.json()
 }
 
-export const getMeta = (signal) => get('/meta', {}, signal)
+async function post(path, body, signal) {
+  const res = await fetch(new URL(path, API), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    signal,
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    const detail = Array.isArray(err.detail) ? err.detail[0]?.msg : err.detail
+    throw new Error(detail ?? `API answered ${res.status}`)
+  }
+  return res.json()
+}
+
+export const getMeta =(signal) => get('/meta', {}, signal)
 export const getAreas = (signal) => get('/areas', {}, signal)
 export const searchItems = (q, district, signal) => get('/items/search', { q, district }, signal)
 export const getItem = (code, district, signal) => get(`/items/${code}`, { district }, signal)
 export const getStores = (district, signal) => get('/stores', { district }, signal)
 export const getMovers = (district, signal) => get('/movers', { district, limit: 5 }, signal)
 export const getDeals = (district, signal) => get('/deals', { district, limit: 8 }, signal)
+export const compareBasket = (district, itemCodes, signal) =>
+  post('/basket', { district, item_codes: itemCodes }, signal)
