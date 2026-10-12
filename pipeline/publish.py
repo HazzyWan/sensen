@@ -40,6 +40,20 @@ CHAINS = [
     (r"VILLAGE GROCER", "Village Grocer"),
 ]
 
+# Shops renamed since PriceCatcher listed them. Tesco Malaysia became Lotus's
+# in 2021-2022, but many PriceCatcher shops still carry the old name, which
+# confuses shoppers and Google Maps alike.
+RENAMES = [
+    (re.compile(r"^TESCO(\s+EXTRA)?\s+"), "LOTUS'S "),
+]
+
+
+def current_name(name):
+    """'TESCO EXTRA ARA DAMANSARA' -> "LOTUS'S ARA DAMANSARA"."""
+    for pattern, new in RENAMES:
+        name = pattern.sub(new, name)
+    return name
+
 # Malay words in item names -> English, so "chicken" finds AYAM.
 ENGLISH = {
     "AYAM": "chicken", "TELUR": "egg eggs", "BERAS": "rice", "DAGING": "meat",
@@ -134,6 +148,7 @@ def shop_table(prices):
     """
     shops = (prices[["premise_code", "premise", "premise_type", "region", "district"]]
              .drop_duplicates("premise_code").reset_index(drop=True))
+    shops["premise"] = shops["premise"].map(current_name)
     shops["chain"] = [chain_of(n, t) for n, t in zip(shops["premise"], shops["premise_type"])]
     addresses = pd.read_parquet(RAW_DIR / "lookup_premise.parquet")[["premise_code", "address"]]
     addresses["address"] = tidy(addresses["address"])
@@ -167,6 +182,7 @@ def main():
               .groupby(keys + ["date", "premise", "premise_type", "region", "district"])
               ["price"].median().reset_index())
     latest = latest[latest["date"] >= last_date - pd.Timedelta(days=FRESH_DAYS - 1)]
+    latest["premise"] = latest["premise"].map(current_name)
     latest["chain"] = [chain_of(n, t) for n, t in zip(latest["premise"], latest["premise_type"])]
     latest.to_parquet(SERVE_DIR / "latest_prices.parquet", index=False)
 
