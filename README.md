@@ -5,7 +5,7 @@ Find the cheapest shop for an item, see if today's price is low or high compared
 
 **Live app:** https://sensen-xi.vercel.app
 
-**Status:** beta (v0.4.0). Free to use, no account, no ads.
+**Status:** beta (v0.5.0). Free to use, no account, no ads.
 
 <!-- Add your own screenshots to docs/screenshots/ with these names -->
 <p>
@@ -21,11 +21,12 @@ Grocery prices in Malaysia keep going up, and it is hard to tell whether a shop 
 
 ## What it does
 
-- **Cheapest shop per item.** Search in English or BM ("chicken" or "ayam") and see which shops in your area have the lowest recent price.
+- **Cheapest shop per item.** Search in English or BM ("chicken" or "ayam") and see which shops in your area have the lowest recent price. Every item PriceCatcher lists can be found, and the app says clearly when one has no recent price.
+- **Cheapest near you.** Turn on location and see the cheapest shops within 3, 5 or 10 km, with a link to each shop on Google Maps. Distances are worked out on your phone; your location is never sent anywhere.
 - **Low, Normal or High.** Each item gets a label that compares this week's price with its own last 6 months, so you know if it is a good week to buy.
 - **Basket comparison.** Add up to 30 items and see which single shop is cheapest for all of them, plus how much you would save by splitting the trip.
 - **Weekly overview.** Items that are cheaper than usual this week, the biggest price moves, and which shops are cheapest overall in your area.
-- **Works like an app.** Install it to your home screen, use it in English or Bahasa Melayu, and it still shows your last loaded prices when you are offline.
+- **Works like an app.** Install it to your home screen, use it in English or Bahasa Melayu, and it still shows your last loaded prices when you are offline. It updates itself when a new version is released.
 - **Refreshes itself.** New government price data is picked up every morning, with no manual work.
 
 ## Install it on your phone
@@ -46,8 +47,9 @@ It then opens in its own window with the SenSen icon, like any other app.
 
 ```mermaid
 flowchart LR
-    A["data.gov.my<br/>PriceCatcher<br/>(Parquet files)"] -->|download| B["pipeline/<br/>clean, weekly, publish"]
-    B -->|6 small tables, ~0.5 MB| C["api/<br/>FastAPI"]
+    A["data.gov.my<br/>PriceCatcher<br/>(Parquet files)"] -->|download| B["pipeline/<br/>clean, weekly,<br/>geocode, publish"]
+    H["OpenStreetMap<br/>Nominatim"] -.->|shop positions,<br/>looked up once| B
+    B -->|7 small tables, ~0.5 MB| C["api/<br/>FastAPI"]
     C -->|JSON| D["web/<br/>React PWA"]
     E["GitHub Actions<br/>daily at 9 am MYT"] -.->|runs pipeline,<br/>commits new data| B
     C -.- F["Vercel<br/>(serverless Python)"]
@@ -55,9 +57,9 @@ flowchart LR
 ```
 
 1. **Data.** [PriceCatcher](https://data.gov.my/data-catalogue/pricecatcher) is open data from KPDN: prices of hundreds of everyday items, checked in person by officers at shops all over Malaysia. It is published as monthly Parquet files.
-2. **Pipeline (Python, pandas).** Downloads the last 6 full months plus the current month, keeps Selangor and KL grocery shops, removes obvious data errors, and builds weekly prices, labels, price moves and shop rankings. The API only needs 6 small tables (about 0.5 MB), which are copied into `api/data/`.
-3. **API (FastAPI).** Loads those tables into memory once at start-up and answers every request from memory. Endpoints: `/areas`, `/items/search`, `/items/{code}`, `/stores`, `/movers`, `/deals`, `/basket`. Interactive docs: https://sensen-api.vercel.app/docs
-4. **Web app (React + Vite).** A PWA with a phone layout and a separate laptop layout (a two-column dashboard, not a stretched phone screen).
+2. **Pipeline (Python, pandas).** Downloads the last 6 full months plus the current month, keeps Selangor and KL grocery shops, removes obvious data errors, and builds weekly prices, labels, price moves and shop rankings. It also finds each shop's position on the map with OpenStreetMap, once per shop. The API only needs 7 small tables (about 0.5 MB), which are copied into `api/data/`.
+3. **API (FastAPI).** Loads those tables into memory once at start-up and answers every request from memory. Endpoints: `/areas`, `/items/search`, `/items/{code}`, `/items/{code}/prices`, `/stores`, `/movers`, `/deals`, `/basket`. Interactive docs: https://sensen-api.vercel.app/docs
+4. **Web app (React + Vite).** A PWA with a phone layout and a separate laptop layout (a two-column dashboard, not a stretched phone screen). For "near me" it downloads every shop's price and position for one item, then works out distances on the device.
 5. **Automation.** A GitHub Action runs the pipeline every morning, runs the tests, and commits the new data only if it changed. That commit makes Vercel redeploy the API.
 
 ### How the numbers are decided
@@ -72,6 +74,7 @@ flowchart LR
 | Price moves | Only items with 3 or more shops in both weeks |
 | Cheapest shops | Each shop's prices compared to the area's typical price (needs at least 10 items) |
 | Basket | Shops that have every item come first, so a shop that is cheaper only because it is missing items does not win |
+| Shop positions | Searched from exact to rough (address, building, street, postcode, town). A shop placed far from the other shops in its own district is searched again inside that district, and marked approximate (~) if only a rough spot is found |
 
 ---
 
@@ -83,6 +86,7 @@ flowchart LR
 | API | FastAPI, Pydantic response models, pytest |
 | Web app | React 19, Vite 8, vite-plugin-pwa (Workbox service worker), plain CSS |
 | Hosting | Vercel Hobby (web app as static files, API as a serverless Python function) |
+| Maps | OpenStreetMap Nominatim (shop positions, cached), Google Maps links (no API key) |
 | Automation | GitHub Actions (daily data refresh) |
 | Cost | RM 0: free tiers only, no card on file |
 
@@ -90,6 +94,7 @@ Some choices I made on purpose:
 
 - **No database.** The data changes once a day and is about 0.5 MB, so the API keeps it in memory. That is faster and simpler than running a database, and it costs nothing.
 - **No chart or UI libraries.** The price chart is a hand-drawn SVG, and the area picker is a custom component, because a normal dropdown cannot grey out part of an option. This keeps the app small and fast on a phone.
+- **Your location stays on your phone.** The app asks the server for every shop's price for an item and works out the distances itself (the haversine formula), so no one's location is ever sent or stored.
 - **Offline first.** The service worker serves the app shell from the cache, and API answers use "network first, then cache", so prices stay fresh online and still show when offline.
 - **Two languages without a library.** All text lives in one file (`web/src/i18n.jsx`), so adding a word in English and BM happens in one place.
 
@@ -104,12 +109,14 @@ sensen/
 ├── api/                     the FastAPI app (deployed on its own)
 │   ├── main.py
 │   ├── requirements.txt
-│   └── data/                6 tables made by the pipeline
+│   └── data/                7 tables made by the pipeline
 ├── pipeline/
 │   ├── download.py          get PriceCatcher files from data.gov.my
 │   ├── clean.py             filter to Selangor and KL grocery shops, drop errors
 │   ├── weekly.py            weekly prices, labels and price moves
-│   ├── publish.py           search index, latest prices, areas and towns
+│   ├── geocode.py           shop positions from OpenStreetMap, checked against each district
+│   ├── geocache.csv         saved positions, so each shop is looked up only once
+│   ├── publish.py           search index, latest prices, areas, towns and shops
 │   ├── ship.py              copy the API's tables into api/data
 │   └── run.py               run all the steps in order
 ├── tests/
@@ -118,6 +125,8 @@ sensen/
     ├── src/
     │   ├── components/      Header, AreaPicker, Results, ItemDetail, Basket, ...
     │   ├── api.js           every call to the API
+    │   ├── geo.js           distances and map links for "near me"
+    │   ├── LocationContext.jsx  the phone's location, kept in memory only
     │   ├── i18n.jsx         English and BM text
     │   └── hooks.js         data loading, routing, screen size, online status
     └── vite.config.js       build settings and PWA setup
@@ -164,15 +173,20 @@ The web app talks to `http://127.0.0.1:8000` by default. To point it somewhere e
 - [x] M0 to M2: data pipeline, API, web app (search, item detail, basket, overview)
 - [x] M3: installable PWA, offline support, English and BM
 - [x] M4: live on Vercel with a daily automatic refresh
-- [ ] Nearest cheapest shop using your location (worked out on your phone, never sent anywhere)
-- [ ] Better search ranking for English words
-- [ ] Phase 2: price alerts through a Telegram bot
+- [x] v0.5: cheapest shops near you (location stays on your phone), self-updating app
+- [ ] v0.6: browse by category, bottom tab bar on phone
+- [ ] v0.7: budget planner (pick one shop, set a budget, watch it go down as you add items)
+- [ ] v0.8: scan an item with the camera to find it (visual search)
+- [ ] v0.9: community prices for items PriceCatcher doesn't cover
+- [ ] v1.0: SenSen assistant, an AI chat that answers from real prices
 
 ---
 
 ## Data and credits
 
 Prices come from **PriceCatcher** by the Ministry of Domestic Trade and Cost of Living (KPDN), published on [data.gov.my](https://data.gov.my/data-catalogue/pricecatcher) with DOSM under the **CC BY 4.0** licence. SenSen is an independent project and is not connected to KPDN or DOSM. Prices are reported with a delay of about two weeks, so always check the shelf price.
+
+Shop positions come from [OpenStreetMap](https://www.openstreetmap.org/copyright) (© OpenStreetMap contributors, ODbL), found with the Nominatim service.
 
 The code is under the licence in [LICENSE](LICENSE).
 
