@@ -39,7 +39,12 @@ export default function App() {
     <>{banner}<Header areas={areas ?? []} district={district} onDistrict={pickDistrict}
       query={query} onQuery={setQuery} meta={meta} wide={wide} onBasket={go.basket} /></>
   )
-  const footer = <p className="note">{t('footer')}</p>
+    const footer = (
+    <footer className="note">
+      <p>{t('footer')}</p>
+      <p className="version">{t('version', { v: import.meta.env.VITE_APP_VERSION, b: import.meta.env.VITE_APP_BUILD })}</p>
+    </footer>
+  )
 
   if (error) return <div className="app"><main className="screen">{header}<p className="empty">{t('apiError', { e: error })}</p></main></div>
   const choose = <p className="empty">{t('choose')}</p>

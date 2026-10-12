@@ -1,8 +1,16 @@
+import { readFileSync } from 'node:fs'
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 import { VitePWA } from 'vite-plugin-pwa'
 
 // https://vite.dev/config/
+// Version info shown in the footer. Anything in process.env that starts with
+// VITE_ ends up in import.meta.env inside the app, so setting them here is enough.
+// The version comes from package.json; the build id is the git commit Vercel
+// is building (on your laptop there is none, so it says "local").
+const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8'))
+process.env.VITE_APP_VERSION = pkg.version
+process.env.VITE_APP_BUILD = (process.env.VERCEL_GIT_COMMIT_SHA ?? 'local').slice(0, 7)
 export default defineConfig({
   plugins: [
     react(),

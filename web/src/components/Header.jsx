@@ -12,6 +12,7 @@ export function Header({ areas, district, onDistrict, query, onQuery, meta, wide
       <div className="row between">
         <div className="row brand-row">
           {wide && <span className="brand">Sen<span>Sen</span></span>}
+                    {wide && <span className="beta">{t('beta')}</span>}
           <AreaPicker areas={areas} value={district} onChange={onDistrict} />
           {wide && week}
         </div>

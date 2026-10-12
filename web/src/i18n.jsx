@@ -11,6 +11,8 @@ const en = {
   networkError: 'No connection, and this page was not saved yet. Try again when you are back online.',
   offline: 'You are offline. Showing the prices you last loaded.',
   footer: 'Prices from PriceCatcher by KPDN and DOSM (CC BY 4.0), checked in person by officers.',
+  version: 'SenSen v{v} · beta · build {b}',
+  beta: 'Beta',
   overviewTitle: 'Grocery prices in {d}',
   overviewSub: '{n} shops checked · week of {w}. Search on the left, or pick an item to see its price history.',
   // Header
@@ -97,6 +99,8 @@ const ms = {
   networkError: 'Tiada sambungan, dan halaman ini belum disimpan. Cuba lagi apabila talian kembali.',
   offline: 'Anda di luar talian. Memaparkan harga yang terakhir dimuatkan.',
   footer: 'Harga daripada PriceCatcher oleh KPDN dan DOSM (CC BY 4.0), disemak sendiri oleh pegawai.',
+  version: 'SenSen v{v} · beta · binaan {b}',
+  beta: 'Beta',
   overviewTitle: 'Harga barang runcit di {d}',
   overviewSub: '{n} kedai disemak · minggu {w}. Cari di sebelah kiri, atau pilih barang untuk melihat sejarah harganya.',
   hello: 'Nak beli apa hari ini?',

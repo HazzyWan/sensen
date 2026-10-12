@@ -131,6 +131,8 @@ p { margin: 0; }
 .empty { padding: 24px 12px; text-align: center; color: var(--muted); }
 .offline { position: sticky; top: 0; z-index: 40; background: var(--navy); color: var(--on-navy); text-align: center; font-size: 13px; font-weight: 700; padding: 8px 16px; }
 .note { font-size: 12.5px; color: var(--muted); text-align: center; padding: 8px 18px 24px; }
+.note p { margin: 0; }
+.note .version { margin-top: 6px; font-size: 11.5px; opacity: .8; font-variant-numeric: tabular-nums; }
 
 /* ---------- Item detail ---------- */
 .bar { position: sticky; top: 0; z-index: 5; background: color-mix(in srgb, var(--bg) 92%, transparent); backdrop-filter: blur(10px); display: flex; align-items: center; gap: 10px; padding: 12px 14px; }
@@ -193,6 +195,8 @@ p { margin: 0; }
 .brand-row { gap: 22px; }
 .brand { font-family: var(--f-display); font-weight: 800; font-size: 22px; letter-spacing: -.03em; }
 .brand span { color: var(--brand); }
+.beta { margin-left: -16px; font-size: 10.5px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--brand); background: var(--brand-soft); padding: 2px 7px; border-radius: 99px; }
 .topbar .search input { padding-block: 11px; box-shadow: none; }
 .search-row { gap: 12px; }
 .search-row .search { flex: 1; }
