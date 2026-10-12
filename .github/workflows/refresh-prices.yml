@@ -1,11 +1,11 @@
-# Every week: download the latest PriceCatcher data, rebuild the tables,
+# Every day: download the latest PriceCatcher data, rebuild the tables,
 # check them, and commit api/data if anything changed. That push makes
 # Vercel redeploy the API with the new prices. Free for this repo.
 name: Refresh prices
 
 on:
   schedule:
-    - cron: "0 1 * * 2"   # Tuesdays 01:00 UTC = 9:00 am in Malaysia
+    - cron: "0 1 * * *"   # every day at 01:00 UTC = 9:00 am in Malaysia
   workflow_dispatch:       # adds a "Run workflow" button for running it by hand
 
 permissions:
@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   refresh:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04   # a fixed version, so a new Ubuntu can't break the run by surprise
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v6
