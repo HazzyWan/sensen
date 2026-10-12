@@ -12,14 +12,14 @@ from typing import Literal
 
 import pandas as pd
 from fastapi import FastAPI, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 CLEAN_DIR = Path("data/clean")
 SERVE_DIR = Path("data/serve")
 
 app = FastAPI(
     title="SenSen API",
-    version="0.2.0",
+    version="0.3.0",
     description="Grocery prices for Selangor and Kuala Lumpur, from PriceCatcher (KPDN, DOSM, CC BY 4.0).",
 )
 
@@ -39,6 +39,11 @@ DISTRICT_REGION = (latest[["district", "region"]].drop_duplicates()
 LABEL_BY_AREA = {(r.area_type, r.area, r.item_code): r for r in labels.itertuples()}
 
 HISTORY_MIN_WEEKS = 8  # fewer district weeks than this -> chart uses the region
+STORE_MIN_ITEMS = 10   # a shop needs this many priced items to get a price index
+
+# Typical (median) fresh price of each item in each district: the yardstick
+# for "is this shop cheaper or dearer than usual around here?"
+DISTRICT_MEDIAN = latest.groupby(["district", "item_code"])["price"].median()
 
 # ---------- Response shapes (these also drive the /docs page) ----------
 
@@ -115,6 +120,46 @@ class ItemDetail(BaseModel):
     cheapest_shops: list[ShopPrice]
     history_scope: Literal["district", "region"]
     history: list[WeekPoint]
+
+
+class StoreIndex(BaseModel):
+    shop: str
+    chain: str
+    shop_type: str
+    items_compared: int
+    vs_district_pct: float = Field(description="Negative = cheaper than the district's usual price")
+    cheapest_on: int = Field(description="Items where this shop has the district's lowest price")
+
+
+class BasketRequest(BaseModel):
+    district: str = Field(examples=["Petaling"])
+    item_codes: list[int] = Field(min_length=1, max_length=30, examples=[[1, 2, 3]])
+
+
+class BasketLine(BaseModel):
+    item_code: int
+    name: str
+    price: float
+
+
+class BasketShop(BaseModel):
+    shop: str
+    chain: str
+    shop_type: str
+    complete: bool
+    total: float = Field(description="Sum of the items this shop has")
+    items_found: int
+    missing: list[str]
+    lines: list[BasketLine]
+
+
+class BasketResult(BaseModel):
+    district: str
+    items_requested: int
+    cheapest_mix_total: float = Field(
+        description="If you bought each item wherever it is cheapest in the district")
+    cheapest_mix_covers: int
+    shops: list[BasketShop]
 
 
 # ---------- Helpers ----------
@@ -267,4 +312,74 @@ def item_detail(
         history_scope=history_scope,
         history=[WeekPoint(week=r.week.date(), price=round(float(r.price), 2), shops=int(r.n_stores))
                  for r in history.itertuples()],
+    )
+
+
+@app.get("/stores", response_model=list[StoreIndex])
+def stores(district: str = Query(description="District from /areas, e.g. 'Petaling'")):
+    """Shops in the district ranked from cheapest to dearest overall.
+
+    Each fresh price is compared with the district's usual price for that item.
+    The ratios are clipped to 0.5-2.0 so one odd price can't swing a shop's
+    score, then averaged (the prototype's price index, per district).
+    """
+    check_district(district)
+    here = latest[latest["district"] == district].copy()
+    here["usual"] = DISTRICT_MEDIAN.loc[district].reindex(here["item_code"]).to_numpy()
+    here["ratio"] = (here["price"] / here["usual"]).clip(0.5, 2.0)
+
+    lowest = here.groupby("item_code")["price"].transform("min")
+    here["is_cheapest"] = here["price"] == lowest
+
+    g = (here.groupby(["premise", "chain", "premise_type"])
+             .agg(items=("item_code", "nunique"), index=("ratio", "mean"),
+                  cheapest_on=("is_cheapest", "sum"))
+             .reset_index())
+    g = g[g["items"] >= STORE_MIN_ITEMS].sort_values("index")
+    return [StoreIndex(shop=r.premise, chain=r.chain, shop_type=r.premise_type,
+                       items_compared=int(r.items),
+                       vs_district_pct=round((r.index - 1) * 100, 1),
+                       cheapest_on=int(r.cheapest_on))
+            for r in g.itertuples()]
+
+
+@app.post("/basket", response_model=BasketResult)
+def basket(req: BasketRequest):
+    """Which single shop in the district is cheapest for the whole basket.
+
+    Shops that have every item come first, cheapest total first. Shops missing
+    items come after, fewest missing first, and list what they're missing.
+    """
+    check_district(req.district)
+    wanted = list(dict.fromkeys(req.item_codes))  # drop duplicates, keep order
+    unknown = sorted(set(wanted) - set(items["item_code"]))
+    if unknown:
+        raise HTTPException(404, f"Unknown item codes: {unknown}")
+    names = items.set_index("item_code")["item"]
+
+    here = latest[(latest["district"] == req.district) & latest["item_code"].isin(wanted)]
+
+    # Baseline: each item bought wherever it is cheapest in the district.
+    best = here.groupby("item_code")["price"].min()
+
+    shops_out = []
+    for (shop, chain, shop_type), g in here.groupby(["premise", "chain", "premise_type"]):
+        found = set(g["item_code"])
+        missing = [names[c] for c in wanted if c not in found]
+        lines = [BasketLine(item_code=int(r.item_code), name=names[r.item_code],
+                            price=round(float(r.price), 2))
+                 for r in g.sort_values("item_code").itertuples()]
+        shops_out.append(BasketShop(
+            shop=shop, chain=chain, shop_type=shop_type, complete=not missing,
+            total=round(float(g["price"].sum()), 2), items_found=len(found),
+            missing=missing, lines=lines,
+        ))
+
+    shops_out.sort(key=lambda s: (len(s.missing), s.total))
+    return BasketResult(
+        district=req.district,
+        items_requested=len(wanted),
+        cheapest_mix_total=round(float(best.sum()), 2),
+        cheapest_mix_covers=int(best.size),
+        shops=shops_out[:10],
     )
