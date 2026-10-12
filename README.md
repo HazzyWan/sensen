@@ -10,7 +10,7 @@ Find the cheapest shop for an item, see if today's price is low or high compared
 <!-- Add your own screenshots to docs/screenshots/ with these names -->
 <p>
   <img src="docs/screenshots/laptop.png" alt="SenSen on a laptop" width="68%">
-  <img src="docs/screenshots/phone.jpg" alt="SenSen on a phone" width="26%">
+  <img src="docs/screenshots/phone.jpeg" alt="SenSen on a phone" width="26%">
 </p>
 
 ---
