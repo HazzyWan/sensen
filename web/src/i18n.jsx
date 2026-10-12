@@ -6,7 +6,7 @@ import { createContext, useContext, useEffect, useState } from 'react'
 
 const en = {
   // App
-  choose: 'Pick your district above to see prices near you.',
+  choose: 'Pick your area above to see prices near you.',
   apiError: 'Could not reach the server: {e}',
   footer: 'Prices from PriceCatcher by KPDN and DOSM (CC BY 4.0), checked in person by officers.',
   overviewTitle: 'Grocery prices in {d}',
@@ -18,6 +18,8 @@ const en = {
   searchPh: 'Search chicken, telur, beras…',
   searchAria: 'Search items',
   districtAria: 'Your area',
+  areaSearchPh: 'Type your town, e.g. Subang',
+  areaNone: 'No area matches “{q}”.',
   basketAria: 'My basket, {n} items',
   // Search
   typeMore: 'Type at least 2 letters.',
@@ -99,6 +101,8 @@ const ms = {
   searchPh: 'Cari ayam, telur, beras…',
   searchAria: 'Cari barang',
   districtAria: 'Kawasan anda',
+  areaSearchPh: 'Taip bandar anda, cth. Subang',
+  areaNone: 'Tiada kawasan sepadan dengan “{q}”.',
   basketAria: 'Bakul saya, {n} barang',
   typeMore: 'Taip sekurang-kurangnya 2 huruf.',
   searching: 'Mencari…',

@@ -1,6 +1,7 @@
 import { useBasket } from '../BasketContext'
 import { useLang } from '../i18n'
 import { shortDate } from '../format'
+import { AreaPicker } from './AreaPicker'
 
 export function Header({ areas, district, onDistrict, query, onQuery, meta, wide, onBasket }) {
   const { t, lang } = useLang()
@@ -11,7 +12,7 @@ export function Header({ areas, district, onDistrict, query, onQuery, meta, wide
       <div className="row between">
         <div className="row brand-row">
           {wide && <span className="brand">Sen<span>Sen</span></span>}
-          <DistrictPicker areas={areas} value={district} onChange={onDistrict} />
+          <AreaPicker areas={areas} value={district} onChange={onDistrict} />
           {wide && week}
         </div>
         {!wide && <div className="row"><LangToggle />{district && basket}</div>}
@@ -45,39 +46,6 @@ function BasketButton({ onClick }) {
       </svg>
       {items.length > 0 && <span className="count">{items.length}</span>}
     </button>
-  )
-}
-
-// Each option shows the area's main towns, so "Petaling" reads as
-// "Petaling · Shah Alam, Subang Jaya" and people can find their own area.
-function DistrictPicker({ areas, value, onChange }) {
-  const { t } = useLang()
-  const regions = [...new Set(areas.map((a) => a.region))]
-  const current = areas.find((a) => a.district === value)
-  return (
-    <label className="loc">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden="true">
-        <path d="M12 21s7-6.2 7-11a7 7 0 0 0-14 0c0 4.8 7 11 7 11z" /><circle cx="12" cy="10" r="2.5" />
-      </svg>
-      {/* The real <select> is invisible and sits on top of this label, so tapping
-          the label opens the phone's own picker, while the closed state stays short. */}
-      <span className="loc-text">
-        <span className="loc-name">{value || t('chooseDistrict')} <span aria-hidden="true">▾</span></span>
-        <select value={value} onChange={(e) => onChange(e.target.value)} aria-label={t('districtAria')}>
-          <option value="">{t('chooseDistrict')}</option>
-          {regions.map((r) => (
-            <optgroup key={r} label={r}>
-              {areas.filter((a) => a.region === r).map((a) => (
-                <option key={a.district} value={a.district}>
-                  {a.towns.length ? `${a.district} · ${a.towns.join(', ')}` : a.district}
-                </option>
-              ))}
-            </optgroup>
-          ))}
-        </select>
-        {current?.towns.length > 0 && <span className="loc-hint">{current.towns.join(', ')}</span>}
-      </span>
-    </label>
   )
 }
 
