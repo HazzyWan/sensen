@@ -40,6 +40,7 @@ weekly = pd.read_parquet(CLEAN_DIR / "weekly.parquet")
 labels = pd.read_parquet(CLEAN_DIR / "labels.parquet")
 items = pd.read_parquet(SERVE_DIR / "items.parquet")
 latest = pd.read_parquet(SERVE_DIR / "latest_prices.parquet")
+movers = pd.read_parquet(CLEAN_DIR / "movers.parquet")
 
 # district -> region, e.g. "Petaling" -> "Selangor"
 DISTRICT_REGION = (latest[["district", "region"]].drop_duplicates()
@@ -162,6 +163,35 @@ class BasketShop(BaseModel):
     items_found: int
     missing: list[str]
     lines: list[BasketLine]
+
+
+class Mover(BaseModel):
+    item_code: int
+    name: str
+    unit: str
+    price_before: float
+    price_now: float
+    change_pct: float
+
+
+class Movers(BaseModel):
+    scope: Literal["district", "region"]
+    area: str
+    week: date | None
+    risers: list[Mover]
+    fallers: list[Mover]
+
+
+class Deal(BaseModel):
+    item_code: int
+    name: str
+    unit: str
+    cheapest_price: float
+    cheapest_shop: str
+    usual_low: float
+    usual_high: float
+    below_usual_pct: float = Field(description="How far this week's price sits below the middle of the usual range")
+    label_scope: Literal["district", "region"]
 
 
 class BasketResult(BaseModel):
@@ -394,3 +424,63 @@ def basket(req: BasketRequest):
         cheapest_mix_covers=int(best.size),
         shops=shops_out[:10],
     )
+
+
+MOVERS_MIN_ROWS = 6  # fewer district movers than this -> use the region's
+
+
+@app.get("/movers", response_model=Movers)
+def weekly_movers(
+    district: str = Query(description="District from /areas, e.g. 'Petaling'"),
+    limit: int = Query(5, ge=1, le=20),
+):
+    """Biggest week-on-week price rises and falls (only items seen in 3+ shops both weeks)."""
+    region = check_district(district)
+    scope, area = "district", district
+    rows = movers[(movers["area_type"] == "district") & (movers["area"] == district)]
+    if len(rows) < MOVERS_MIN_ROWS:
+        scope, area = "region", region
+        rows = movers[(movers["area_type"] == "region") & (movers["area"] == region)]
+    rows = rows.merge(items[["item_code", "item", "unit"]], on="item_code")
+
+    def to_list(df):
+        return [Mover(item_code=int(r.item_code), name=r.item, unit=r.unit,
+                      price_before=round(float(r.price_prev), 2), price_now=round(float(r.price), 2),
+                      change_pct=round(float(r.change_pct), 1))
+                for r in df.itertuples()]
+
+    return Movers(
+        scope=scope, area=area,
+        week=rows["week"].max().date() if not rows.empty else None,
+        risers=to_list(rows[rows["change_pct"] > 0].nlargest(limit, "change_pct")),
+        fallers=to_list(rows[rows["change_pct"] < 0].nsmallest(limit, "change_pct")),
+    )
+
+
+@app.get("/deals", response_model=list[Deal])
+def deals(
+    district: str = Query(description="District from /areas, e.g. 'Petaling'"),
+    limit: int = Query(10, ge=1, le=50),
+):
+    """Items labelled Low right now that you can buy in the district, best deal first."""
+    region = check_district(district)
+    here = latest[latest["district"] == district]
+    cheapest = here.loc[here.groupby("item_code")["price"].idxmin()].set_index("item_code")
+    names = items.set_index("item_code")
+
+    out = []
+    for code in cheapest.index:
+        row, scope = label_for(code, district, region)
+        if row is None or row.label != "Low":
+            continue
+        usual_mid = (row.usual_low + row.usual_high) / 2
+        c = cheapest.loc[code]
+        out.append(Deal(
+            item_code=int(code), name=names.at[code, "item"], unit=names.at[code, "unit"],
+            cheapest_price=round(float(c.price), 2), cheapest_shop=c.premise,
+            usual_low=float(row.usual_low), usual_high=float(row.usual_high),
+            below_usual_pct=round((1 - row.price / usual_mid) * 100, 1),
+            label_scope=scope,
+        ))
+    out.sort(key=lambda d: -d.below_usual_pct)
+    return out[:limit]

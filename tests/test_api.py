@@ -110,3 +110,20 @@ def test_basket_rejects_bad_input(district):
                                         "item_codes": list(range(1, 32))}).status_code == 422
     assert client.post("/basket", json={"district": district,
                                         "item_codes": [999999]}).status_code == 404
+
+
+# ---------- movers and deals ----------
+
+def test_movers_split_into_rises_and_falls(district):
+    m = client.get("/movers", params={"district": district}).json()
+    assert all(x["change_pct"] > 0 for x in m["risers"])
+    assert all(x["change_pct"] < 0 for x in m["fallers"])
+    rises = [x["change_pct"] for x in m["risers"]]
+    assert rises == sorted(rises, reverse=True)
+
+
+def test_deals_are_below_usual_and_best_first(district):
+    rows = client.get("/deals", params={"district": district}).json()
+    pcts = [d["below_usual_pct"] for d in rows]
+    assert pcts == sorted(pcts, reverse=True)
+    assert all(d["usual_low"] <= d["usual_high"] for d in rows)

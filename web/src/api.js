@@ -13,7 +13,10 @@ async function get(path, params = {}, signal) {
   return res.json()
 }
 
-export const getMeta = () => get('/meta')
-export const getAreas = () => get('/areas')
-export const searchItems = (q, district, signal) =>
-  get('/items/search', { q, district }, signal)
+export const getMeta = (signal) => get('/meta', {}, signal)
+export const getAreas = (signal) => get('/areas', {}, signal)
+export const searchItems = (q, district, signal) => get('/items/search', { q, district }, signal)
+export const getItem = (code, district, signal) => get(`/items/${code}`, { district }, signal)
+export const getStores = (district, signal) => get('/stores', { district }, signal)
+export const getMovers = (district, signal) => get('/movers', { district, limit: 5 }, signal)
+export const getDeals = (district, signal) => get('/deals', { district, limit: 8 }, signal)
