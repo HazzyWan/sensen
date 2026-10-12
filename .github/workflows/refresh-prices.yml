@@ -1,0 +1,45 @@
+# Every week: download the latest PriceCatcher data, rebuild the tables,
+# check them, and commit api/data if anything changed. That push makes
+# Vercel redeploy the API with the new prices. Free for this repo.
+name: Refresh prices
+
+on:
+  schedule:
+    - cron: "0 1 * * 2"   # Tuesdays 01:00 UTC = 9:00 am in Malaysia
+  workflow_dispatch:       # adds a "Run workflow" button for running it by hand
+
+permissions:
+  contents: write          # allowed to push the new data back to the repo
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Install packages
+        run: pip install -r requirements-dev.txt
+
+      - name: Run the pipeline
+        run: python pipeline/run.py
+
+      - name: Check the new tables
+        run: python -m pytest
+
+      - name: Commit the new data if it changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898699+github-actions[bot]@users.noreply.github.com"
+          git add api/data
+          if git diff --cached --quiet; then
+            echo "Prices unchanged, nothing to commit."
+            exit 0
+          fi
+          git commit -m "Refresh prices ($(date -u +%Y-%m-%d))"
+          git push
