@@ -17,7 +17,7 @@ import re
 from pathlib import Path
 
 import pandas as pd
-from clean import load_items  # same item list and cooked-food rule as clean.py
+from clean import load_items, tidy  # same item list and cooked-food rule as clean.py
 
 CLEAN_DIR = Path("data/clean")
 SERVE_DIR = Path("data/serve")
@@ -79,6 +79,7 @@ def search_text(row):
 
 
 RAW_DIR = Path("data/raw")
+GEOCACHE = Path("pipeline/geocache.csv")
 
 # Malaysian addresses end with "<postcode> <TOWN>, <STATE>". We read the town
 # after the 5-digit postcode, e.g. "... 40150 SHAH ALAM, SELANGOR" -> "Shah Alam".
@@ -125,6 +126,26 @@ def area_table(latest):
                      "towns": "|".join(towns[:TOWNS_PER_AREA])})
     return pd.DataFrame(rows)
 
+def shop_table(prices):
+    """One row per shop: name, chain, type, area, address and map position.
+
+    precision says how exact the position is (see geocode.py); shops with no
+    position yet get precision "none" and are left out of "near me".
+    """
+    shops = (prices[["premise_code", "premise", "premise_type", "region", "district"]]
+             .drop_duplicates("premise_code").reset_index(drop=True))
+    shops["chain"] = [chain_of(n, t) for n, t in zip(shops["premise"], shops["premise_type"])]
+    addresses = pd.read_parquet(RAW_DIR / "lookup_premise.parquet")[["premise_code", "address"]]
+    addresses["address"] = tidy(addresses["address"])
+    shops = shops.merge(addresses, on="premise_code", how="left")
+    if GEOCACHE.exists():
+        geo = pd.read_csv(GEOCACHE, usecols=["premise_code", "lat", "lon", "precision"])
+        shops = shops.merge(geo, on="premise_code", how="left")
+    else:
+        shops["lat"] = shops["lon"] = float("nan")
+        shops["precision"] = None
+    shops["precision"] = shops["precision"].fillna("none")
+    return shops
 
 def main():
     SERVE_DIR.mkdir(parents=True, exist_ok=True)
@@ -151,6 +172,9 @@ def main():
 
     areas = area_table(latest)
     areas.to_parquet(SERVE_DIR / "areas.parquet", index=False)
+    
+    shops = shop_table(prices)
+    shops.to_parquet(SERVE_DIR / "shops.parquet", index=False)
 
     priced = items["item_code"].isin(latest["item_code"]).sum()
     print(f"Items: {len(items)} tracked, {priced} with a fresh price somewhere in Selangor or KL")
@@ -158,6 +182,9 @@ def main():
           f"{(last_date - pd.Timedelta(days=FRESH_DAYS - 1)).date()}")
     print(f"Fresh shop prices: {len(latest):,} "
           f"({latest['premise_code'].nunique()} shops, {latest['item_code'].nunique()} items)")
+    located = shops["precision"].value_counts()
+    print(f"Shops: {len(shops)}, map position by precision: "
+          + ", ".join(f"{k} {v}" for k, v in located.items()))
     print("Areas and their main towns:")
     for r in areas.itertuples():
         print(f"  {r.region:13} {r.district:16} {r.shops:>3} shops  {r.towns.replace('|', ', ')}")

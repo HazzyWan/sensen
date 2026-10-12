@@ -52,6 +52,7 @@ items = pd.read_parquet(DATA_DIR / "items.parquet")
 latest = pd.read_parquet(DATA_DIR / "latest_prices.parquet")
 movers = pd.read_parquet(DATA_DIR / "movers.parquet")
 area_rows = pd.read_parquet(DATA_DIR / "areas.parquet").sort_values(["region", "district"])
+shops = pd.read_parquet(DATA_DIR / "shops.parquet")
 
 # district -> region, e.g. "Petaling" -> "Selangor"
 DISTRICT_REGION = (latest[["district", "region"]].drop_duplicates()
@@ -129,6 +130,19 @@ class ShopPrice(BaseModel):
     price: float
     price_date: date
     more_than_cheapest: float
+
+class ShopLocated(BaseModel):
+    shop: str
+    chain: str
+    shop_type: str
+    district: str
+    address: str | None
+    price: float
+    price_date: date
+    lat: float | None
+    lon: float | None
+    location: Literal["address", "street", "postcode", "town", "none"] = Field(
+        description="How exact lat/lon is: the shop itself, its street, its postcode area, or only its town")
 
 
 class WeekPoint(BaseModel):
@@ -322,6 +336,29 @@ def search_items(
     results.sort(key=lambda pair: (pair[0], -pair[1].shops_with_price, pair[1].name))
     return [r for _, r in results[:limit]]
 
+@app.get("/items/{item_code}/prices", response_model=list[ShopLocated])
+def item_prices(item_code: int):
+    """Every fresh price for one item across Selangor and KL, cheapest first,
+    with each shop's map position.
+
+    The app works out which shops are near the user on the phone itself, so
+    the user's location is never sent to this server.
+    """
+    if not (items["item_code"] == item_code).any():
+        raise HTTPException(404, f"Unknown item code {item_code}.")
+    here = latest[latest["item_code"] == item_code].merge(
+        shops[["premise_code", "address", "lat", "lon", "precision"]], on="premise_code", how="left")
+    here = here.sort_values(["price", "premise"])
+
+    def num(v):
+        return None if pd.isna(v) else round(float(v), 6)
+
+    return [ShopLocated(shop=r.premise, chain=r.chain, shop_type=r.premise_type, district=r.district,
+                        address=None if pd.isna(r.address) else r.address,
+                        price=round(float(r.price), 2), price_date=r.date.date(),
+                        lat=num(r.lat), lon=num(r.lon),
+                        location="none" if pd.isna(r.precision) else r.precision)
+            for r in here.itertuples()]
 
 @app.get("/items/{item_code}", response_model=ItemDetail)
 def item_detail(

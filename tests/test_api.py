@@ -116,6 +116,20 @@ def test_basket_rejects_bad_input(district):
     assert client.post("/basket", json={"district": district,
                                         "item_codes": [999999]}).status_code == 404
 
+# ---------- prices with map positions (for "near me") ----------
+
+def test_item_prices_cheapest_first_with_positions_in_selangor_kl():
+    rows = client.get("/items/1/prices").json()
+    assert rows, "item 1 should have fresh prices somewhere"
+    prices = [r["price"] for r in rows]
+    assert prices == sorted(prices)
+    for r in rows:
+        if r["lat"] is not None:
+            assert 2.5 < r["lat"] < 3.9 and 100.7 < r["lon"] < 102.1
+
+
+def test_item_prices_unknown_item_is_404():
+    assert client.get("/items/999999/prices").status_code == 404
 
 # ---------- areas ----------
 

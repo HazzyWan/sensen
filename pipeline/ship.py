@@ -14,7 +14,7 @@ from pathlib import Path
 # folder the pipeline wrote it to -> tables the API reads
 NEEDED = {
     "data/clean": ["weekly.parquet", "labels.parquet", "movers.parquet"],
-    "data/serve": ["items.parquet", "latest_prices.parquet", "areas.parquet"],
+    "data/serve": ["items.parquet", "latest_prices.parquet", "areas.parquet", "shops.parquet"],
 }
 OUT_DIR = Path("api/data")
 
