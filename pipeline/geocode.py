@@ -17,10 +17,13 @@ Run from the repo root (after clean.py):
 """
 
 import csv
+import math
 import os
 import re
 import time
+from collections import defaultdict
 from pathlib import Path
+from statistics import median
 
 import pandas as pd
 import requests
@@ -28,7 +31,7 @@ import requests
 from clean import CLEAN_DIR, load_premises
 
 CACHE = Path("pipeline/geocache.csv")
-FIELDS = ["premise_code", "address", "lat", "lon", "precision", "query", "strategy"]
+FIELDS = ["premise_code", "address", "lat", "lon", "precision", "query", "strategy", "checked"]
 
 # Bump this when locate() learns new tricks: shops that found nothing with an
 # older strategy are tried once more. Shops that were found are never redone.
@@ -43,6 +46,11 @@ HEADERS = {"User-Agent": "SenSen/0.5 (grocery price app; https://github.com/Hazz
 IN_CI = os.environ.get("CI") == "true"
 PAUSE = 15.0 if IN_CI else 1.1  # seconds between requests
 MAX_REQUESTS = 60 if IN_CI else None
+
+# A shop further than this from the middle of its own district's shops (or 3x
+# the district's usual spread, if bigger) is probably a wrong match, e.g. a
+# shop's name found at another branch of the same chain.
+OUTLIER_MIN_KM = 8
 
 # Anything outside this box is a wrong match (another "Taman Melawati" elsewhere).
 LAT_RANGE = (2.55, 3.85)   # Selangor + KL, with a little room
@@ -113,7 +121,7 @@ def ask(params):
     return None
 
 
-def locate(shop):
+def locate(shop, bounds=None):
     """Try the most exact search first, then fall back to rougher ones.
 
     precision tells the app how far to trust the spot:
@@ -122,6 +130,7 @@ def locate(shop):
       postcode = the postcode area or the taman/bandar was found (about 1 to 3 km)
       town     = only the town or district was found (can be several km off)
       none     = nothing found; the shop is left out of distance searches
+    bounds: extra Nominatim settings that keep every result inside a box.
     """
     address = "" if pd.isna(shop.address) else str(shop.address)
     a = split_address(address)
@@ -151,7 +160,7 @@ def locate(shop):
         if key in seen or not any(params.values()):
             continue  # skip a query identical to one already tried
         seen.add(key)
-        spot = ask(params)
+        spot = ask({**params, **(bounds or {})})
         if spot:
             return {"lat": spot[0], "lon": spot[1], "precision": precision,
                     "query": next(iter(params.values())), "strategy": STRATEGY}
@@ -163,6 +172,52 @@ def load_cache():
         return {}
     with open(CACHE, newline="", encoding="utf-8") as f:
         return {int(r["premise_code"]): r for r in csv.DictReader(f)}
+
+
+def km_between(a, b):
+    """Straight-line distance in km between two (lat, lon) points (haversine)."""
+    la1, lo1, la2, lo2 = map(math.radians, (*a, *b))
+    h = math.sin((la2 - la1) / 2) ** 2 + math.cos(la1) * math.cos(la2) * math.sin((lo2 - lo1) / 2) ** 2
+    return 2 * 6371 * math.asin(math.sqrt(h))
+
+
+def far_from_district(cache, shops):
+    """Shops placed far from the other shops in their own district.
+
+    PriceCatcher says which district each shop is in, so a shop whose spot is
+    much further from its district's shops than they are from each other was
+    most likely matched to the wrong place (another branch, a street with the
+    same name). Returns (shop, km away, the district's limit in km, box around
+    the district's other shops, the district's middle).
+    """
+    by_district = defaultdict(list)
+    for s in shops.itertuples():
+        r = cache.get(s.premise_code)
+        if r and r["precision"] != "none" and r["lat"] not in ("", None):
+            by_district[s.district].append((s, (float(r["lat"]), float(r["lon"]))))
+
+    found = []
+    for pts in by_district.values():
+        if len(pts) < 3:
+            continue  # too few shops to know what "normal" looks like
+        centre = (median(p[0] for _, p in pts), median(p[1] for _, p in pts))
+        dists = [km_between(p, centre) for _, p in pts]
+        limit = max(OUTLIER_MIN_KM, 3 * median(dists))
+        good = [p for (_, p), d in zip(pts, dists) if d <= limit]
+        pad = 0.02  # about 2 km around the outermost good shops
+        box = (min(p[0] for p in good) - pad, max(p[0] for p in good) + pad,
+               min(p[1] for p in good) - pad, max(p[1] for p in good) + pad)
+        found += [(s, d, limit, box, centre) for (s, _), d in zip(pts, dists) if d > limit]
+    return found
+
+
+def save(cache):
+    # Rewrite the whole file each time: small, and nothing is lost on Ctrl+C.
+    with open(CACHE, "w", newline="", encoding="utf-8") as f:
+        w = csv.DictWriter(f, fieldnames=FIELDS)
+        w.writeheader()
+        for code in sorted(cache):
+            w.writerow(cache[code])
 
 
 def main():
@@ -183,27 +238,48 @@ def main():
     todo = [s for s in shops.itertuples() if needs_lookup(s)]
     print(f"{len(shops)} shops, {len(shops) - len(todo)} already in the cache, {len(todo)} to look up")
 
-    new_file = not CACHE.exists()
-    for n, shop in enumerate(todo, 1):
-        try:
+    changed = False
+    try:
+        for n, shop in enumerate(todo, 1):
             found = locate(shop)
-        except OutOfRequests:
-            print(f"  Request limit for this run reached; {len(todo) - n + 1} shops left for the next run.")
-            break
-        except requests.RequestException as e:
-            # Service busy or down: keep what we have and try the rest next run.
-            print(f"  Nominatim error ({e}); stopping lookups for now.")
-            break
-        cache[shop.premise_code] = {"premise_code": shop.premise_code, "address": shop.address, **found}
-        # Rewrite the whole file each time: small, and nothing is lost on Ctrl+C.
-        with open(CACHE, "w", newline="", encoding="utf-8") as f:
-            w = csv.DictWriter(f, fieldnames=FIELDS)
-            w.writeheader()
-            for code in sorted(cache):
-                w.writerow(cache[code])
-        print(f"  [{n}/{len(todo)}] {found['precision']:8} {shop.premise[:45]}")
+            cache[shop.premise_code] = {"premise_code": shop.premise_code, "address": shop.address, **found}
+            save(cache)
+            changed = True
+            print(f"  [{n}/{len(todo)}] {found['precision']:8} {shop.premise[:45]}")
 
-    if new_file or todo:
+        # Second pass: shops far from the rest of their district are searched
+        # again, this time only inside the area where that district's shops are.
+        suspects = [x for x in far_from_district(cache, shops)
+                    if not cache[x[0].premise_code].get("checked")]
+        if suspects:
+            print(f"\n{len(suspects)} shops are far from the rest of their district; searching again inside it:")
+        for shop, away, limit, (south, north, west, east), centre in suspects:
+            bounds = {"viewbox": f"{west},{north},{east},{south}", "bounded": 1}
+            found = locate(shop, bounds)
+            # Big districts (Hulu Selangor, Petaling) have towns far apart, so
+            # a shop a bit past the limit may well be right. Only a precise new
+            # match replaces it, unless it was very far out (over 2x the limit).
+            very_far = away > 2 * limit
+            if found["precision"] == "address" or (very_far and found["precision"] != "none"):
+                verdict = f"moved -> {found['precision']}"
+            elif very_far:
+                found.update(lat=round(centre[0], 6), lon=round(centre[1], 6), precision="town",
+                             query=f"middle of {shop.district}")
+                verdict = "moved -> middle of district (town)"
+            else:
+                found, verdict = dict(cache[shop.premise_code]), "kept (no better match inside the district)"
+            cache[shop.premise_code] = {**found, "premise_code": shop.premise_code,
+                                        "address": shop.address, "checked": "done"}
+            save(cache)
+            changed = True
+            print(f"  {shop.premise[:38]:38} {away:4.1f} km out (limit {limit:.0f}) {verdict}")
+    except OutOfRequests:
+        print("  Request limit for this run reached; the rest waits for the next run.")
+    except requests.RequestException as e:
+        # Service busy or down: keep what we have and try the rest next run.
+        print(f"  Nominatim error ({e}); stopping lookups for now.")
+
+    if changed:
         counts = pd.Series([r["precision"] for r in cache.values()]).value_counts()
         print("\nCache now holds:")
         print(counts.to_string())
