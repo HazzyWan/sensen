@@ -13,6 +13,10 @@ Find the cheapest shop for an item, see if today's price is low or high compared
   <img src="docs/screenshots/phone.jpeg" alt="SenSen on a phone" width="19%">
 </p>
 
+## Why SenSen
+
+Grocery prices in Malaysia keep going up, and it is hard to tell whether a shop is charging a fair price or just more than everyone else. SenSen pushes back against overpricing with transparency: it shows what an item usually costs, which shops nearby are cheaper, and when a price is higher than normal. Every number comes from the government's own PriceCatcher data, so shoppers can decide where to spend with facts instead of guesses.
+
 ---
 
 ## What it does
