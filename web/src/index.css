@@ -129,6 +129,7 @@ p { margin: 0; }
 .dv i.d { background: var(--dear); }
 
 .empty { padding: 24px 12px; text-align: center; color: var(--muted); }
+.offline { position: sticky; top: 0; z-index: 40; background: var(--navy); color: var(--on-navy); text-align: center; font-size: 13px; font-weight: 700; padding: 8px 16px; }
 .note { font-size: 12.5px; color: var(--muted); text-align: center; padding: 8px 18px 24px; }
 
 /* ---------- Item detail ---------- */

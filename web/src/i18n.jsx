@@ -8,6 +8,8 @@ const en = {
   // App
   choose: 'Pick your area above to see prices near you.',
   apiError: 'Could not reach the server: {e}',
+  networkError: 'No connection, and this page was not saved yet. Try again when you are back online.',
+  offline: 'You are offline. Showing the prices you last loaded.',
   footer: 'Prices from PriceCatcher by KPDN and DOSM (CC BY 4.0), checked in person by officers.',
   overviewTitle: 'Grocery prices in {d}',
   overviewSub: '{n} shops checked · week of {w}. Search on the left, or pick an item to see its price history.',
@@ -92,6 +94,8 @@ const en = {
 const ms = {
   choose: 'Pilih kawasan anda di atas untuk melihat harga berdekatan.',
   apiError: 'Tidak dapat menghubungi pelayan: {e}',
+  networkError: 'Tiada sambungan, dan halaman ini belum disimpan. Cuba lagi apabila talian kembali.',
+  offline: 'Anda di luar talian. Memaparkan harga yang terakhir dimuatkan.',
   footer: 'Harga daripada PriceCatcher oleh KPDN dan DOSM (CC BY 4.0), disemak sendiri oleh pegawai.',
   overviewTitle: 'Harga barang runcit di {d}',
   overviewSub: '{n} kedai disemak · minggu {w}. Cari di sebelah kiri, atau pilih barang untuk melihat sejarah harganya.',

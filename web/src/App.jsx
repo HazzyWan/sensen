@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { getAreas, getMeta } from './api'
-import { useFetch, useRoute, useWide } from './hooks'
+import { useFetch, useOnline, useRoute, useWide } from './hooks'
 import { shortDate } from './format'
 import { useLang } from './i18n'
 import { Header } from './components/Header'
@@ -23,6 +23,7 @@ export default function App() {
   const [district, setDistrict] = useState(loadDistrict)
   const [query, setQuery] = useState('')
   const [route, go] = useRoute()
+  const online = useOnline()
   const item = route.view === 'item' ? route.code : null
 
   // A saved district that no longer exists in the data is cleared.
@@ -33,9 +34,10 @@ export default function App() {
   const pickDistrict = (d) => { setDistrict(d); saveDistrict(d); if (route.view === 'item') go.home() }
   const shops = areas?.find((a) => a.district === district)?.shops
 
+  const banner = !online && <div className="offline" role="status">{t('offline')}</div>
   const header = (
-    <Header areas={areas ?? []} district={district} onDistrict={pickDistrict}
-      query={query} onQuery={setQuery} meta={meta} wide={wide} onBasket={go.basket} />
+    <>{banner}<Header areas={areas ?? []} district={district} onDistrict={pickDistrict}
+      query={query} onQuery={setQuery} meta={meta} wide={wide} onBasket={go.basket} /></>
   )
   const footer = <p className="note">{t('footer')}</p>
 
