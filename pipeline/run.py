@@ -9,7 +9,7 @@ Run from the repo root:
 import subprocess
 import sys
 
-STEPS = ["download", "clean", "weekly", "publish", "ship"]
+STEPS = ["download", "clean", "weekly", "geocode", "publish", "ship"]
 
 for step in STEPS:
     print(f"\n===== {step}.py =====")
