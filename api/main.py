@@ -12,6 +12,7 @@ from typing import Literal
 
 import pandas as pd
 from fastapi import FastAPI, HTTPException, Query
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 CLEAN_DIR = Path("data/clean")
@@ -21,6 +22,16 @@ app = FastAPI(
     title="SenSen API",
     version="0.3.0",
     description="Grocery prices for Selangor and Kuala Lumpur, from PriceCatcher (KPDN, DOSM, CC BY 4.0).",
+)
+
+# The app runs on a different address (port 5173) from the API (port 8000), so the
+# browser blocks its requests unless the API says that address is allowed.
+# The live app's address gets added here in M4.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_methods=["GET", "POST"],
+    allow_headers=["Content-Type"],
 )
 
 # ---------- Data, loaded once when the server starts ----------
