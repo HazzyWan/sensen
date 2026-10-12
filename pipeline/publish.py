@@ -17,6 +17,7 @@ import re
 from pathlib import Path
 
 import pandas as pd
+from clean import load_items  # same item list and cooked-food rule as clean.py
 
 CLEAN_DIR = Path("data/clean")
 SERVE_DIR = Path("data/serve")
@@ -56,7 +57,11 @@ ENGLISH = {
     "BAYAM": "spinach", "SAWI": "mustard greens", "KANGKUNG": "water spinach",
     "TAUHU": "tofu", "ANGGUR": "grapes", "NENAS": "pineapple",
     "TEMBIKAI": "watermelon", "BENDI": "okra ladies fingers", "BUNCIS": "french beans",
-    "TOMATO": "tomato", "BROKOLI": "broccoli", "ROTI": "bread",
+    "TOMATO": "tomato", "BROKOLI": "broccoli", "ROTI": "bread loaf",
+    "GANDUM": "wheat wholemeal", "BIJIRIN": "cereal", "BISKUT": "biscuit",
+    "AIR": "water", "JUS": "juice", "SERBUK": "powder",
+    "MARJERIN": "margarine", "MAJERIN": "margarine",
+    "PENCUCI": "detergent washing", "DETERGEN": "detergent",
 }
 
 
@@ -125,8 +130,11 @@ def main():
     SERVE_DIR.mkdir(parents=True, exist_ok=True)
     prices = pd.read_parquet(CLEAN_DIR / "prices.parquet")
 
-    items = (prices[["item_code", "item", "unit", "item_group", "item_category"]]
-             .drop_duplicates("item_code").reset_index(drop=True))
+    # Every item PriceCatcher tracks, not only the ones priced in the last few
+    # months here, so a search for "bread" can say "no recent price in your
+    # area" instead of pretending the item doesn't exist.
+    items = load_items()[["item_code", "item", "unit", "item_group", "item_category"]]
+    items = items.drop_duplicates("item_code").reset_index(drop=True)
     items["search"] = items.apply(search_text, axis=1)
     items.to_parquet(SERVE_DIR / "items.parquet", index=False)
 
@@ -144,7 +152,8 @@ def main():
     areas = area_table(latest)
     areas.to_parquet(SERVE_DIR / "areas.parquet", index=False)
 
-    print(f"Items: {len(items)}")
+    priced = items["item_code"].isin(latest["item_code"]).sum()
+    print(f"Items: {len(items)} tracked, {priced} with a fresh price somewhere in Selangor or KL")
     print(f"Data runs to {last_date.date()}; fresh = on or after "
           f"{(last_date - pd.Timedelta(days=FRESH_DAYS - 1)).date()}")
     print(f"Fresh shop prices: {len(latest):,} "

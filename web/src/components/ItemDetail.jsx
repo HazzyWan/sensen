@@ -51,7 +51,7 @@ export function ItemDetail({ code, district, onClose, wide }) {
               <span className="sv">{t('shopsHavePrice', { n: d.shops_with_price, p: rm(d.district_median) })}</span>
             </div>
           ) : (
-            <p className="empty">{t('noFresh', { d: district })}</p>
+            <p className="empty">{d.priced_anywhere ? t('noFresh', { d: district }) : t('notPricedLong')}</p>
           )}
 
           <BasketToggle basket={basket} item={{ code: d.item_code, name: d.name, unit: d.unit }} />

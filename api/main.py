@@ -68,6 +68,11 @@ STORE_MIN_ITEMS = 10   # a shop needs this many priced items to get a price inde
 # for "is this shop cheaper or dearer than usual around here?"
 DISTRICT_MEDIAN = latest.groupby(["district", "item_code"])["price"].median()
 
+# Items with a fresh price in at least one shop we cover. Some items in
+# PriceCatcher's list (packaged bread, for one) haven't been priced anywhere
+# for months, and the app says so instead of blaming the user's district.
+PRICED_ANYWHERE = set(latest["item_code"])
+
 # ---------- Response shapes (these also drive the /docs page) ----------
 
 Label = Literal["High", "Normal", "Low"]
@@ -95,11 +100,13 @@ class SearchResult(BaseModel):
     name: str
     unit: str
     category: str
-    cheapest_price: float
-    cheapest_shop: str
-    cheapest_chain: str
-    price_date: date
+    # All None (and shops_with_price 0) when no shop in the district has a fresh price.
+    cheapest_price: float | None
+    cheapest_shop: str | None
+    cheapest_chain: str | None
+    price_date: date | None
     shops_with_price: int
+    priced_anywhere: bool = Field(description="False if no shop in Selangor or KL has a fresh price")
     label: Label | None
     label_scope: Literal["district", "region"] | None
 
@@ -139,6 +146,7 @@ class ItemDetail(BaseModel):
     district: str
     region: str
     shops_with_price: int
+    priced_anywhere: bool = Field(description="False if no shop in Selangor or KL has a fresh price")
     district_median: float | None
     label: LabelInfo | None
     cheapest_shops: list[ShopPrice]
@@ -287,27 +295,30 @@ def search_items(
     ]
 
     here = latest[(latest["district"] == district) & latest["item_code"].isin(found["item_code"])]
-    if here.empty:
-        return []
-
     cheapest = here.loc[here.groupby("item_code")["price"].idxmin()].set_index("item_code")
     shop_counts = here.groupby("item_code")["premise_code"].nunique()
 
     results = []
     for it in found.itertuples():
+        base = dict(item_code=it.item_code, name=it.item, unit=it.unit, category=it.item_category)
         if it.item_code not in cheapest.index:
-            continue  # no fresh price for this item in this district
+            # Tracked by PriceCatcher, but no shop here has a fresh price:
+            # still listed, after the priced items, so the user knows why.
+            results.append(((1, it.relevance), SearchResult(
+                **base, cheapest_price=None, cheapest_shop=None, cheapest_chain=None,
+                price_date=None, shops_with_price=0,
+                priced_anywhere=it.item_code in PRICED_ANYWHERE, label=None, label_scope=None)))
+            continue
         c = cheapest.loc[it.item_code]
         row, scope = label_for(it.item_code, district, region)
-        results.append((it.relevance, SearchResult(
-            item_code=it.item_code, name=it.item, unit=it.unit, category=it.item_category,
-            cheapest_price=round(float(c.price), 2), cheapest_shop=c.premise,
+        results.append(((0, it.relevance), SearchResult(
+            **base, cheapest_price=round(float(c.price), 2), cheapest_shop=c.premise,
             cheapest_chain=c.chain, price_date=c.date.date(),
-            shops_with_price=int(shop_counts[it.item_code]),
+            shops_with_price=int(shop_counts[it.item_code]), priced_anywhere=True,
             label=row.label if row is not None else None, label_scope=scope,
         )))
 
-    # Best name match first, then items sold in more shops (the staples people want).
+    # Priced items first; then best name match, then items sold in more shops.
     results.sort(key=lambda pair: (pair[0], -pair[1].shops_with_price, pair[1].name))
     return [r for _, r in results[:limit]]
 
@@ -358,6 +369,7 @@ def item_detail(
         category=it["item_category"], group=it["item_group"],
         district=district, region=region,
         shops_with_price=int(here["premise_code"].nunique()),
+        priced_anywhere=item_code in PRICED_ANYWHERE,
         district_median=round(float(here["price"].median()), 2) if not here.empty else None,
         label=label,
         cheapest_shops=cheapest_shops,

@@ -27,9 +27,17 @@ export function Results({ query, district, selected, onOpen }) {
   if (loading && !data) return <p className="empty">{t('searching')}</p>
   if (!data?.length) return <p className="empty">{t('noResults', { q: term, d: district })}</p>
 
-  return (
+    return (
     <div className="list">
-      {data.map((r) => (
+      {data.map((r) => (r.cheapest_price == null ? (
+        // Tracked by PriceCatcher, but no shop in this area has a recent price.
+        <button key={r.item_code} className={`li nop ${selected === r.item_code ? 'on' : ''}`} onClick={() => onOpen(r.item_code)}>
+          <span className="t">
+            <b>{nice(r.name)}</b>
+            <span>{unitText(r.unit, t)} · {r.priced_anywhere ? t('noPriceHere', { d: district }) : t('notPriced')}</span>
+          </span>
+        </button>
+      ) : (
         <button key={r.item_code} className={`li ${selected === r.item_code ? 'on' : ''}`} onClick={() => onOpen(r.item_code)}>
           <span className="t">
             <b>{nice(r.name)}</b>
@@ -40,7 +48,7 @@ export function Results({ query, district, selected, onOpen }) {
             {r.label && <span className={`pill ${LABEL_CLASS[r.label]}`}>{t(r.label)}</span>}
           </span>
         </button>
-      ))}
+      )))}
     </div>
   )
 }

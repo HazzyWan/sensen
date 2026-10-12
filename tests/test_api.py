@@ -53,7 +53,12 @@ def test_search_english_word_matches_malay_name(district):
     results = client.get("/items/search", params={"q": "chicken", "district": district}).json()
     assert any("AYAM" in r["name"] for r in results)
 
-
+def test_search_bread_finds_roti_and_lists_priced_first(district):
+    results = client.get("/items/search", params={"q": "bread", "district": district}).json()
+    assert any("ROTI" in r["name"] for r in results), "PriceCatcher has ROTI items"
+    priced = [r["cheapest_price"] is not None for r in results]
+    assert priced == sorted(priced, reverse=True), "items without a price here come last"
+ 
 def test_search_too_short_is_422(district):
     r = client.get("/items/search", params={"q": "a", "district": district})
     assert r.status_code == 422

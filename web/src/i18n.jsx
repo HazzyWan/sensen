@@ -29,6 +29,9 @@ const en = {
   typeMore: 'Type at least 2 letters.',
   searching: 'Searching…',
   noResults: 'Nothing found for “{q}” in {d}. Try another word in English or BM.',
+  noPriceHere: 'No recent price in {d}',
+  notPriced: 'Not priced by PriceCatcher lately',
+  notPricedLong: 'PriceCatcher lists this item, but it hasn\'t been priced at any shop in Selangor or KL lately.',
   // Labels
   Low: 'Low', Normal: 'Normal', High: 'High',
   // Dashboard
@@ -115,6 +118,9 @@ const ms = {
   typeMore: 'Taip sekurang-kurangnya 2 huruf.',
   searching: 'Mencari…',
   noResults: 'Tiada hasil untuk “{q}” di {d}. Cuba perkataan lain dalam BM atau English.',
+  noPriceHere: 'Tiada harga terkini di {d}',
+  notPriced: 'Tiada harga PriceCatcher baru-baru ini',
+  notPricedLong: 'PriceCatcher menyenaraikan barang ini, tetapi harganya belum direkodkan di mana-mana kedai di Selangor atau KL baru-baru ini.',
   Low: 'Murah', Normal: 'Biasa', High: 'Mahal',
   lowTitle: 'Murah minggu ini',
   lowSub: 'Di bawah harga biasa',
