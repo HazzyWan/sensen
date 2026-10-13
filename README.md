@@ -182,6 +182,7 @@ The web app talks to `http://127.0.0.1:8000` by default. To point it somewhere e
 - [ ] v0.8: scan an item with the camera to find it (visual search)
 - [ ] v0.9: community prices for items PriceCatcher doesn't cover
 - [ ] v1.0: SenSen assistant, an AI chat that answers from real prices
+- [ ] v1.1: a SenSen mascot and a first-run tour that highlights each button and tab and explains it
 
 ---
 
