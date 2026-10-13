@@ -151,6 +151,33 @@ def test_basket_rejects_bad_input(district):
                                         "quantities": [0]}).status_code == 422
 
 
+# ---------- shops (budget planner) ----------
+
+def test_shops_most_items_first(district):
+    rows = client.get("/shops", params={"district": district}).json()
+    assert rows, "there should be shops with fresh prices"
+    counts = [r["items_priced"] for r in rows]
+    assert counts == sorted(counts, reverse=True)
+
+
+def test_shop_items_search_only_what_the_shop_prices(district):
+    shop = client.get("/shops", params={"district": district}).json()[0]
+    everything = client.get(f"/shops/{shop['premise_code']}/items", params={"limit": 400}).json()
+    assert len(everything) == min(shop["items_priced"], 400)
+    ayam = client.get(f"/shops/{shop['premise_code']}/items", params={"q": "ayam"}).json()
+    codes = {r["item_code"] for r in everything}
+    assert all(r["item_code"] in codes for r in ayam)  # nothing the shop doesn't price
+    # "Cheaper at" shops really are cheaper, cheapest first, and never the shop itself.
+    for r in everything:
+        prices = [c["price"] for c in r["cheaper"]]
+        assert prices == sorted(prices) and all(p < r["price"] for p in prices)
+        assert shop["premise_code"] not in [c["premise_code"] for c in r["cheaper"]]
+
+
+def test_shop_items_unknown_shop_is_404():
+    assert client.get("/shops/-5/items").status_code == 404
+
+
 # ---------- browse by category ----------
 
 def test_categories_add_up(district):

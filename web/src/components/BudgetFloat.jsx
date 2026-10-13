@@ -7,11 +7,13 @@ import { nice, rm } from '../format'
 // The budget, always in view while you browse: a card in the corner on a
 // laptop (it can be folded into a small pill), a slim bar above the tabs on a
 // phone. It updates as items are added, and briefly shows "+RM 9.49".
-// Tapping it opens the budget screen. Shown only once a budget is set.
+// Tapping it opens the budget screen. Shown once a budget is set, even
+// before anything is in the basket.
 export function BudgetFloat({ district, wide, onOpen }) {
   const { t } = useLang()
   const { plan, setMini } = useBasket()
-  const { chosen, planned, inTrolley, approx } = useBasketData(district)
+  const { chosen, loading, planned, inTrolley, approx } = useBasketData(district)
+  const shopName = chosen?.shop ?? plan.shopName
 
   const amount = plan.shopping ? inTrolley : planned
   const budget = plan.budget
@@ -23,8 +25,8 @@ export function BudgetFloat({ district, wide, onOpen }) {
   // first answer from the server is just remembered, not shown as a change.
   const [seen, setSeen] = useState(null)
   const [flash, setFlash] = useState(null) // { change, key }
-  if (chosen && seen === null) setSeen(amount)
-  else if (chosen && Math.abs(amount - seen) > 0.004) {
+  if (seen === null) { if (!loading) setSeen(amount) }
+  else if (Math.abs(amount - seen) > 0.004) {
     setFlash({ change: amount - seen, key: (flash?.key ?? 0) + 1 })
     setSeen(amount)
   }
@@ -71,9 +73,11 @@ export function BudgetFloat({ district, wide, onOpen }) {
     <aside className="bf-card" aria-label={t('planTitle')}>
       <div className="bf-head">
         <span className="bf-tag">{plan.shopping ? t('inTrolley') : t('planTitle')}</span>
-        <button className="bf-min" onClick={() => setMini(true)} aria-label={t('bfHide')} title={t('bfHide')}>–</button>
+        <button className="bf-min" onClick={() => setMini(true)} aria-label={t('bfHide')} title={t('bfHide')}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" aria-hidden="true"><path d="M6 12h12" /></svg>
+        </button>
       </div>
-      {chosen && <span className="bf-shop">{nice(chosen.shop)}</span>}
+      {shopName && <span className="bf-shop">{nice(shopName)}</span>}
       <div className="bf-nums">
         <span className="bf-of">{ofText}</span>
         {flashTag}

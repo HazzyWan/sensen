@@ -17,9 +17,13 @@ export function useBasketData(district) {
     return list.length ? compareBasket(district, list, plan.shop, signal) : Promise.resolve(null)
   }, [request, district, plan.shop])
 
-  // The shop the user picked, or the cheapest one until they pick.
+  // The shop the user picked, or the cheapest one until they pick. A picked
+  // shop with none of the items isn't in the answer: then nothing is priced
+  // there, and every item is estimated from elsewhere.
   const shops = data?.shops ?? []
-  const chosen = shops.find((s) => s.premise_code === plan.shop) ?? shops[0] ?? null
+  const chosen = plan.shop != null
+    ? shops.find((s) => s.premise_code === plan.shop) ?? null
+    : shops[0] ?? null
 
   // One row per item, priced at the chosen shop with the quantities on screen
   // now (not the ones in the last answer), so totals move as you tap.

@@ -74,10 +74,10 @@ export default function App() {
   useEffect(() => { save(DISTRICT_KEY, district) }, [district])
   useEffect(() => { save(AUTO_KEY, auto ? 'on' : '') }, [auto])
 
-  // The floating budget: once a budget is set, it stays in view while browsing
+  // The floating budget: once a plan is started, it stays in view while browsing
   // (not on the basket and budget screens, which already show it).
   const basket = useBasket()
-  const floating = Boolean(district && basket.plan.budget != null && basket.items.length > 0
+  const floating = Boolean(district && basket.plan.active && basket.plan.budget != null
     && route.view !== 'basket' && route.view !== 'budget')
   const budgetFloat = floating && <BudgetFloat district={district} wide={wide} onOpen={go.budget} />
 

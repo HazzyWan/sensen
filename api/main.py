@@ -196,6 +196,41 @@ class ItemDetail(BaseModel):
     history: list[WeekPoint]
 
 
+class ShopSummary(BaseModel):
+    premise_code: int
+    shop: str
+    chain: str
+    shop_type: str
+    suburb: str | None
+    lat: float | None
+    lon: float | None
+    location: Literal["address", "street", "postcode", "town", "none"]
+    items_priced: int = Field(description="Items with a fresh price at this shop")
+
+
+class CheaperAt(BaseModel):
+    premise_code: int
+    shop: str
+    price: float
+    suburb: str | None
+    lat: float | None
+    lon: float | None
+    location: Literal["address", "street", "postcode", "town", "none"]
+
+
+class ShopItem(BaseModel):
+    item_code: int
+    name: str
+    unit: str
+    category: str
+    category_en: str | None
+    price: float
+    price_date: date
+    cheaper: list[CheaperAt] = Field(
+        description="Up to 3 other shops in the same district with a lower fresh price, cheapest first. "
+                    "The app picks the nearest one itself if location is on.")
+
+
 class StoreIndex(BaseModel):
     shop: str
     chain: str
@@ -346,23 +381,30 @@ def search_items(
 ):
     """Find items by name and show the cheapest fresh price in the district."""
     region = check_district(district)
-
-    # Each word must match the START of a word: "ayam" finds AYAM but not BAYAM,
-    # and "chick" still finds chicken. re.escape stops symbols in q acting as regex.
-    patterns = [re.compile(r"\b" + re.escape(t)) for t in q.lower().split()]
-    found = items[items["search"].apply(lambda s: all(p.search(s) for p in patterns))].copy()
+    found = matching(items, q)
     if found.empty:
         return []
+    return results_for(found, district, region)[:limit]
 
-    # Relevance: name starts with the first word (0), word appears in the name (1),
-    # matched only through category or English words (2).
+
+def matching(table, q):
+    """Rows of `table` (with item and search columns) whose words match q.
+
+    Each word must match the START of a word: "ayam" finds AYAM but not BAYAM,
+    and "chick" still finds chicken. re.escape stops symbols in q acting as regex.
+    Adds `relevance`: name starts with the first word (0), word appears in the
+    name (1), matched only through category or English words (2).
+    """
+    patterns = [re.compile(r"\b" + re.escape(t)) for t in q.lower().split()]
+    if not patterns:
+        return table.iloc[0:0].assign(relevance=0)
+    found = table[table["search"].apply(lambda s: all(p.search(s) for p in patterns))].copy()
     first = patterns[0]
     found["relevance"] = [
         0 if first.match(name.lower()) else 1 if first.search(name.lower()) else 2
         for name in found["item"]
     ]
-
-    return results_for(found, district, region)[:limit]
+    return found
 
 
 def results_for(found, district, region):
@@ -544,6 +586,74 @@ def stores(district: str = Query(description="District from /areas, e.g. 'Petali
                        vs_district_pct=round((r.index - 1) * 100, 1),
                        cheapest_on=int(r.cheapest_on))
             for r in g.itertuples()]
+
+
+@app.get("/shops", response_model=list[ShopSummary])
+def shop_list(district: str = Query(description="District from /areas, e.g. 'Petaling'")):
+    """Shops in the district with fresh prices, most items priced first, for
+    picking a shop in the budget planner. The app sorts them by distance itself
+    (with the phone's location, which never comes here)."""
+    check_district(district)
+    here = latest[latest["district"] == district]
+    counts = here.groupby("premise_code")["item_code"].nunique()
+    names = here.drop_duplicates("premise_code").set_index("premise_code")
+    info = shops.set_index("premise_code")
+
+    def num(v):
+        return None if pd.isna(v) else round(float(v), 6)
+
+    out = []
+    for code, n in counts.sort_values(ascending=False).items():
+        row = names.loc[code]
+        geo = info.loc[code] if code in info.index else None
+        out.append(ShopSummary(
+            premise_code=int(code), shop=row.premise, chain=row.chain, shop_type=row.premise_type,
+            suburb=None if geo is None or pd.isna(geo.suburb) else geo.suburb,
+            lat=None if geo is None else num(geo.lat), lon=None if geo is None else num(geo.lon),
+            location="none" if geo is None or pd.isna(geo.precision) else geo.precision,
+            items_priced=int(n)))
+    return out
+
+
+@app.get("/shops/{premise_code}/items", response_model=list[ShopItem])
+def shop_items(
+    premise_code: int,
+    q: str = Query("", description="Words to look for, e.g. 'ayam'; empty = everything priced here"),
+    limit: int = Query(60, ge=1, le=400),
+):
+    """Items with a fresh price at one shop, for searching what that shop sells,
+    each with the shops nearby (same district) that sell it for less."""
+    here = latest[latest["premise_code"] == premise_code]
+    if here.empty:
+        raise HTTPException(404, f"No fresh prices for shop {premise_code}.")
+    table = here.merge(items[["item_code", "item", "unit", "item_category", "category_en", "search"]],
+                       on="item_code", how="inner")
+    if q.strip():
+        table = matching(table, q).sort_values(["relevance", "item"])
+    else:
+        table = table.sort_values(["item_category", "item"])
+    table = table.head(limit)
+
+    # Other shops in the same district selling the same item for less.
+    mine = table.set_index("item_code")["price"]
+    others = latest[(latest["district"] == here["district"].iloc[0])
+                    & (latest["premise_code"] != premise_code)
+                    & latest["item_code"].isin(mine.index)]
+    others = others[others["price"] < others["item_code"].map(mine) - 0.005]
+    others = (others.merge(shops[["premise_code", "lat", "lon", "suburb", "precision"]], on="premise_code", how="left")
+              .sort_values("price"))
+    cheaper = {code: [CheaperAt(
+        premise_code=int(o.premise_code), shop=o.premise, price=round(float(o.price), 2),
+        suburb=None if pd.isna(o.suburb) else o.suburb,
+        lat=None if pd.isna(o.lat) else round(float(o.lat), 6), lon=None if pd.isna(o.lon) else round(float(o.lon), 6),
+        location="none" if pd.isna(o.precision) else o.precision,
+    ) for o in g.head(3).itertuples()] for code, g in others.groupby("item_code")}
+
+    return [ShopItem(item_code=int(r.item_code), name=r.item, unit=r.unit, category=r.item_category,
+                     category_en=None if pd.isna(r.category_en) else r.category_en,
+                     price=round(float(r.price), 2), price_date=r.date.date(),
+                     cheaper=cheaper.get(r.item_code, []))
+            for r in table.itertuples()]
 
 
 @app.post("/basket", response_model=BasketResult)

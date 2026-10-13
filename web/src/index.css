@@ -404,7 +404,9 @@ p { margin: 0; }
 }
 .bf-head, .bf-foot, .bf-nums { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .bf-shop { font-weight: 700; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.bf-min { width: 26px; height: 26px; border-radius: 8px; background: var(--soft); color: var(--muted); font-weight: 800; }
+.bf-min { width: 28px; height: 28px; border-radius: 8px; background: var(--soft); color: var(--muted); display: grid; place-items: center; padding: 0; }
+.bf-min svg { width: 16px; height: 16px; }
+.bf-min:hover { color: var(--ink); }
 .bf-pill {
   position: fixed; right: 24px; bottom: 24px; z-index: 25; display: flex; align-items: center; gap: 10px;
   padding: 6px 14px 6px 6px; border-radius: 99px; background: var(--card); border: 1px solid var(--line);
@@ -412,3 +414,46 @@ p { margin: 0; }
 }
 .bf-pill.over { color: var(--dear); }
 .bf-pill .cta-ic { width: 34px; height: 34px; border-radius: 99px; font-size: 12px; background: var(--brand); color: var(--brand-ink); }
+
+/* Budget planner: picking a shop, the shop in the plan, adding from the shop */
+.shop-pick { gap: 10px; }
+.shop-pick .sechead { margin: 0; }
+.shop-pick .small { margin: 0; }
+.shop-pick .list { box-shadow: none; max-height: min(520px, 60vh); overflow: auto; }
+.shop-pick-tools { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.shop-filter {
+  flex: 1; min-width: 160px; font: inherit; font-size: 14.5px; color: var(--ink); background: var(--soft);
+  border: 1.5px solid var(--line); border-radius: 12px; padding: 9px 12px;
+}
+.shop-filter:focus { outline: none; border-color: var(--brand); }
+.shop-li { text-align: left; }
+.shop-li .r { display: grid; justify-items: end; gap: 2px; }
+.shop-now { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 42px;
+  background: var(--soft); border: 1.5px solid var(--line); border-radius: 12px; padding: 6px 10px; }
+.shop-now .t { display: grid; min-width: 0; }
+.shop-now b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.shop-item { grid-template-columns: 46px minmax(0, 1fr) auto; }
+.add-btn { padding: 7px 12px; border-radius: 10px; font-size: 13px; font-weight: 800; background: var(--brand); color: var(--brand-ink); white-space: nowrap; }
+.add-btn.on { background: var(--save-soft); color: var(--save); }
+.add-btn:disabled { opacity: .45; cursor: not-allowed; }
+.li .t .near-tag { color: var(--save); font-weight: 700; }
+
+/* Budget plan setup steps, end plan, "cheaper at" hints, shop categories */
+.step { justify-self: start; font-size: 11.5px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase;
+  color: var(--brand); background: var(--brand-soft); padding: 3px 9px; border-radius: 99px; }
+.plan .sechead { margin: 0; }
+.btn.ghost-plain { background: var(--soft); color: var(--ink); }
+.btn:disabled { opacity: .45; }
+.end-plan { order: 11; justify-self: center; color: var(--muted); font-weight: 700; }
+.end-plan:hover { color: var(--dear); }
+.cheaper { display: block; margin-top: 2px; font-size: 12px; font-weight: 700; color: var(--save); }
+.li .t .cheaper { color: var(--save); white-space: normal; overflow: visible; text-overflow: clip; }
+.cat-groups { display: grid; gap: 8px; }
+.cat-group { border: 1px solid var(--line); border-radius: 16px; background: var(--card); overflow: hidden; }
+.cat-group > summary { list-style: none; cursor: pointer; display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; padding: 12px 14px; }
+.cat-group > summary::-webkit-details-marker { display: none; }
+.cat-group > summary::after { content: '›'; font-size: 20px; color: var(--muted); transition: transform .15s; }
+.cat-group[open] > summary::after { transform: rotate(90deg); }
+.cat-group > summary span { margin-left: auto; }
+.cat-group .list { border: 0; border-top: 1px solid var(--line); border-radius: 0; box-shadow: none; }

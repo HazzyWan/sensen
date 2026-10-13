@@ -43,16 +43,16 @@ export function Basket({ district, onBack, onOpen, onBudget, wide }) {
           )}
         </section>
 
-        {items.length > 0 && (
-          <button className="budget-cta" onClick={onBudget}>
-            <span className="cta-ic" aria-hidden="true">RM</span>
-            <span className="cta-t">
-              <b>{plan.shopping ? t('continueShopping') : t('startBudget')}</b>
-              <span>{plan.shopping ? t('continueShoppingSub') : t('startBudgetSub')}</span>
-            </span>
-            <span className="cta-go" aria-hidden="true">›</span>
-          </button>
-        )}
+        {/* Budgeting works with an empty basket too: pick a shop and add from there. */}
+        <button className="budget-cta" onClick={onBudget}>
+          <span className="cta-ic" aria-hidden="true">RM</span>
+          <span className="cta-t">
+            <b>{!plan.active ? t('startBudget') : plan.shopping ? t('continueShopping') : t('openPlan')}</b>
+            <span>{!plan.active ? t('startBudgetSub')
+              : t('openPlanSub', { b: rm(plan.budget ?? 0), s: nice(plan.shopName ?? '') })}</span>
+          </span>
+          <span className="cta-go" aria-hidden="true">›</span>
+        </button>
 
         {error && <p className="empty">{error}</p>}
         {loading && !data && items.length > 0 && <p className="empty">{t('comparing')}</p>}

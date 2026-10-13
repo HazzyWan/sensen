@@ -12,7 +12,10 @@ export function distanceKm(a, b) {
 }
 
 // 0.43 -> "450 m", 3.27 -> "3.3 km"
-export const kmText = (km) => (km < 1 ? `${Math.max(50, Math.round((km * 1000) / 50) * 50)} m` : `${km.toFixed(1)} km`)
+export function kmText(km) {
+  const m = Math.max(50, Math.round((km * 1000) / 50) * 50)
+  return m < 1000 ? `${m} m` : `${km.toFixed(1)} km` // 0.99 km is "1.0 km", not "1000 m"
+}
 
 // A Google Maps link (free, no API key). Searching by the shop's name and area
 // opens Google's own page for the shop (opening hours, photos, directions),
