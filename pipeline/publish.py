@@ -23,7 +23,7 @@ from pathlib import Path
 import pandas as pd
 
 from clean import load_items, tidy  # same item list and cooked-food rule as clean.py
-from geocode import split_address  # sorts an address into building, street, neighbourhood
+from geocode import NOT_A_SUBURB, split_address  # address parts, and names people don't use
 
 CLEAN_DIR = Path("data/clean")
 SERVE_DIR = Path("data/serve")
@@ -199,6 +199,11 @@ def neighbourhoods(addresses, district, limit=4):
     return [name for name, _ in counts.most_common(limit)]
 
 
+# "Pusat Bandar Subang Jaya" (town centre) and "Bandaraya Klang" (city) are
+# better known as just "Subang Jaya" and "Klang".
+CITY_PREFIX = re.compile(r"^(PUSAT BANDAR|BANDARAYA)\s+", re.IGNORECASE)
+
+
 def ranked(names, district):
     """Distinct names, most common first, without the district's own name or
     names that say nothing ('Kuala Lumpur'). Spelling variants count as one."""
@@ -206,11 +211,14 @@ def ranked(names, district):
     for name in names:
         if not isinstance(name, str) or not name.strip() or name.strip() == "-":
             continue
-        key = same_town(name.strip())
+        name = CITY_PREFIX.sub("", name.strip())
+        if NOT_A_SUBURB.search(name):
+            continue
+        key = same_town(name)
         if key == same_town(district) or key in NOT_A_HINT:
             continue
         counts[key] += 1
-        spelling.setdefault(key, Counter())[name.strip()] += 1
+        spelling.setdefault(key, Counter())[name] += 1
     return [(spelling[k].most_common(1)[0][0], n) for k, n in counts.most_common()]
 
 

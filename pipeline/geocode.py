@@ -128,9 +128,12 @@ def ask(params):
     return None
 
 
-# Numbered sections ("Seksyen 7", "Presint 9") are real, but people say the town
-# ("Shah Alam", "Putrajaya"), so those fall through to the next, bigger name.
-NOT_A_SUBURB = re.compile(r"^(SEKSYEN|SECTION|PRESINT|PRECINCT|JALAN)\b|^\d", re.IGNORECASE)
+# Names people don't use for where they live: numbered sections ("Seksyen 7",
+# "Presint 9", "Zon Perindustrian Seksyen 51") and industrial zones. These
+# fall through to the next, bigger name ("Shah Alam", "Petaling Jaya").
+NOT_A_SUBURB = re.compile(
+    r"\b(SEKSYEN|SECTION|PRESINT|PRECINCT)\s*\d|PERINDUSTRIAN|INDUSTRIAL|^JALAN\b|^\d",
+    re.IGNORECASE)
 
 
 def suburb_of(lat, lon):
@@ -142,7 +145,7 @@ def suburb_of(lat, lon):
     address = hit.get("address", {}) if isinstance(hit, dict) else {}
     for key in ("suburb", "quarter", "neighbourhood", "city_district", "village", "town", "city"):
         name = address.get(key)
-        if name and not NOT_A_SUBURB.match(name):
+        if name and not NOT_A_SUBURB.search(name):
             return name
     return "-"
 
@@ -302,8 +305,12 @@ def main():
 
         # Third pass: the standard neighbourhood name of each shop's spot, for
         # the area picker. Only for shops placed closer than "somewhere in town".
+        # Also redoes names saved before NOT_A_SUBURB learned to skip them.
+        def needs_name(r):
+            name = r.get("suburb") or ""
+            return not name or (name != "-" and NOT_A_SUBURB.search(name))
         named = [s for s in shops.itertuples()
-                 if not cache[s.premise_code].get("suburb")
+                 if needs_name(cache[s.premise_code])
                  and cache[s.premise_code]["precision"] in ("address", "street", "postcode")]
         if named:
             print(f"\nLooking up the neighbourhood of {len(named)} shops:")
