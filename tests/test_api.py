@@ -112,12 +112,43 @@ def test_basket_complete_shops_first_then_cheapest(district):
         assert r["cheapest_mix_total"] <= complete_totals[0]
 
 
+def test_basket_quantities_multiply_prices(district):
+    one = client.post("/basket", json={"district": district, "item_codes": [1, 2]}).json()
+    more = client.post("/basket", json={"district": district, "item_codes": [1, 2],
+                                        "quantities": [3, 0.5]}).json()
+    by_code = {s["premise_code"]: s for s in more["shops"]}
+    for shop in one["shops"]:
+        if shop["premise_code"] not in by_code:
+            continue  # ranking changed with the quantities; fine
+        lines = {l["item_code"]: l for l in by_code[shop["premise_code"]]["lines"]}
+        for l in shop["lines"]:
+            q = 3 if l["item_code"] == 1 else 0.5
+            assert lines[l["item_code"]]["line_total"] == pytest.approx(l["price"] * q, abs=0.01)
+    assert [i["quantity"] for i in more["items"]] == [3, 0.5]
+
+
+def test_basket_picked_shop_is_never_listed_twice(district):
+    r = client.post("/basket", json={"district": district, "item_codes": [1, 2, 3]}).json()
+    if not r["shops"]:
+        pytest.skip("no shop has these items here")
+    picked = r["shops"][0]["premise_code"]
+    again = client.post("/basket", json={"district": district, "item_codes": [1, 2, 3],
+                                         "include": picked}).json()
+    codes = [s["premise_code"] for s in again["shops"]]
+    assert codes.count(picked) == 1 and len(codes) <= 11
+
+
 def test_basket_rejects_bad_input(district):
     assert client.post("/basket", json={"district": district, "item_codes": []}).status_code == 422
     assert client.post("/basket", json={"district": district,
                                         "item_codes": list(range(1, 32))}).status_code == 422
     assert client.post("/basket", json={"district": district,
                                         "item_codes": [999999]}).status_code == 404
+    # One quantity per item, and only positive ones.
+    assert client.post("/basket", json={"district": district, "item_codes": [1, 2],
+                                        "quantities": [1]}).status_code == 422
+    assert client.post("/basket", json={"district": district, "item_codes": [1],
+                                        "quantities": [0]}).status_code == 422
 
 
 # ---------- browse by category ----------

@@ -19,6 +19,17 @@ export function useFetch(load, deps) {
   return { ...state, error: state.error === 'NETWORK' ? t('networkError') : state.error }
 }
 
+// The value, but only after it has stopped changing for `ms` milliseconds.
+// Typing "ayam" sends one search, and tapping + five times sends one request.
+export function useDebounced(value, ms = 250) {
+  const [v, setV] = useState(value)
+  useEffect(() => {
+    const timer = setTimeout(() => setV(value), ms)
+    return () => clearTimeout(timer)
+  }, [value, ms])
+  return v
+}
+
 // true while the phone or laptop has a connection; updates when it changes.
 export function useOnline() {
   const [online, setOnline] = useState(() => navigator.onLine)
@@ -45,13 +56,14 @@ export function useWide(px = 900) {
   return wide
 }
 
-// Which screen is open is kept in the URL (#/item/12, #/basket), so the phone's
+// Which screen is open is kept in the URL (#/item/12, #/basket, #/budget, #/browse/AYAM), so the phone's
 // back button works and a link to an item can be shared.
 function readRoute() {
   const h = window.location.hash
   const item = h.match(/^#\/item\/(\d+)$/)
   if (item) return { view: 'item', code: Number(item[1]) }
   if (h === '#/basket') return { view: 'basket' }
+  if (h === '#/budget') return { view: 'budget' }
   const browse = h.match(/^#\/browse(?:\/(.+))?$/)
   if (browse) return { view: 'browse', category: browse[1] ? decodeURIComponent(browse[1]) : null }
   return { view: 'home' }
@@ -67,6 +79,7 @@ export function useRoute() {
   const go = {
     item: (c) => { window.location.hash = `/item/${c}` },
     basket: () => { window.location.hash = '/basket' },
+    budget: () => { window.location.hash = '/budget' },
     browse: (category) => { window.location.hash = category ? `/browse/${encodeURIComponent(category)}` : '/browse' },
     home: () => { window.location.hash = '' },
   }

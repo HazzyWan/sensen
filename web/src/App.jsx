@@ -12,6 +12,9 @@ import { Deals, Movers, Stores } from './components/Dashboard'
 import { DealCards, QuickTiles, Spotlight } from './components/Home'
 import { ItemDetail } from './components/ItemDetail'
 import { Basket } from './components/Basket'
+import { Budget } from './components/Budget'
+import { BudgetFloat } from './components/BudgetFloat'
+import { useBasket } from './BasketContext'
 import { Browse } from './components/Browse'
 import { TabBar } from './components/TabBar'
 
@@ -46,9 +49,12 @@ export default function App() {
     if (route.view !== 'item') setFrom(route.view)
     if (route.view === 'browse') setBrowseCat(route.category)
   }
-  const tab = route.view === 'item' ? from : route.view
+  // The budget screen belongs to the Basket tab.
+  const tabOf = (view) => (view === 'budget' ? 'basket' : view)
+  const tab = tabOf(route.view === 'item' ? from : route.view)
   const toRanking = () => document.getElementById('stores')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-  const back = () => (from === 'browse' ? go.browse(browseCat) : from === 'basket' ? go.basket() : go.home())
+  const back = () => (from === 'browse' ? go.browse(browseCat) : from === 'basket' ? go.basket()
+    : from === 'budget' ? go.budget() : go.home())
 
   // A saved district that no longer exists in the data is cleared.
   useEffect(() => {
@@ -67,6 +73,13 @@ export default function App() {
   }
   useEffect(() => { save(DISTRICT_KEY, district) }, [district])
   useEffect(() => { save(AUTO_KEY, auto ? 'on' : '') }, [auto])
+
+  // The floating budget: once a budget is set, it stays in view while browsing
+  // (not on the basket and budget screens, which already show it).
+  const basket = useBasket()
+  const floating = Boolean(district && basket.plan.budget != null && basket.items.length > 0
+    && route.view !== 'basket' && route.view !== 'budget')
+  const budgetFloat = floating && <BudgetFloat district={district} wide={wide} onOpen={go.budget} />
 
   const pickDistrict = (d) => { setDistrict(d); setAuto(false); if (route.view === 'item') go.home() }
   const autoArea = () => { setAuto(true); if (near.status !== 'on') near.start() }
@@ -100,7 +113,9 @@ export default function App() {
     if (route.view === 'item') {
       main = <ItemDetail key={item} code={item} district={district} onClose={back} wide />
     } else if (route.view === 'basket') {
-      main = <Basket district={district} onBack={go.home} onOpen={go.item} wide />
+      main = <Basket district={district} onBack={go.home} onOpen={go.item} onBudget={go.budget} wide />
+    } else if (route.view === 'budget') {
+      main = <Budget district={district} onBack={go.basket} onOpen={go.item} wide />
     } else {
       main = (
         <div className="screen">
@@ -132,6 +147,7 @@ export default function App() {
             <main className="main">{main}{footer}</main>
           </div>
         )}
+        {budgetFloat}
       </div>
     )
   }
@@ -139,10 +155,13 @@ export default function App() {
   // ---------- Phone: one screen at a time, tabs at the bottom ----------
   const tabbar = district && <TabBar tab={tab} go={go} />
   if (district && route.view === 'item') {
-    return <div className="app"><ItemDetail key={item} code={item} district={district} onClose={back} /></div>
+    return <div className={`app ${floating ? 'floating' : ''}`}><ItemDetail key={item} code={item} district={district} onClose={back} />{budgetFloat}</div>
   }
   if (district && route.view === 'basket') {
-    return <div className="app tabbed"><Basket district={district} onBack={go.home} onOpen={go.item} />{tabbar}</div>
+    return <div className="app tabbed"><Basket district={district} onBack={go.home} onOpen={go.item} onBudget={go.budget} />{tabbar}</div>
+  }
+  if (district && route.view === 'budget') {
+    return <div className="app tabbed"><Budget district={district} onBack={go.basket} onOpen={go.item} />{tabbar}</div>
   }
   let body
   if (!district) body = choose
@@ -158,12 +177,13 @@ export default function App() {
     </>
   )
   return (
-    <div className={`app ${district ? 'tabbed' : ''}`}>
+    <div className={`app ${district ? 'tabbed' : ''} ${floating ? 'floating' : ''}`}>
       <main className="screen">
         {header}
         {body}
         {footer}
       </main>
+      {budgetFloat}
       {tabbar}
     </div>
   )

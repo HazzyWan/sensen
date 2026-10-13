@@ -9,6 +9,9 @@ export const rm = (v) => `RM ${v.toFixed(2)}`
 // "1kg" reads better as "per kg" / "sekilo"; other units (30 biji, 500g) stay as they are.
 export const unitText = (u, t) => (u === '1kg' ? t('perKg') : u)
 
+// How many: "1.5 kg" for per-kg items, "× 2" for everything else.
+export const qtyText = (qty, unit) => (unit === '1kg' ? `${qty} kg` : `× ${qty}`)
+
 const LOCALE = { en: 'en-MY', ms: 'ms-MY' }
 
 // "2026-09-24" -> "24 Sep" (English) or "24 Sep" / "24 Sept" style in BM

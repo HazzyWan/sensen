@@ -11,6 +11,7 @@ import { VitePWA } from 'vite-plugin-pwa'
 const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8'))
 process.env.VITE_APP_VERSION = pkg.version
 process.env.VITE_APP_BUILD = (process.env.VERCEL_GIT_COMMIT_SHA ?? 'local').slice(0, 7)
+
 export default defineConfig({
   plugins: [
     react(),

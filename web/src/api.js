@@ -48,5 +48,9 @@ export const browseCategory = (district, category, signal) => get('/browse', { d
 export const getStores = (district, signal) => get('/stores', { district }, signal)
 export const getMovers = (district, signal) => get('/movers', { district, limit: 5 }, signal)
 export const getDeals = (district, signal) => get('/deals', { district, limit: 8 }, signal)
-export const compareBasket = (district, itemCodes, signal) =>
-  post('/basket', { district, item_codes: itemCodes }, signal)
+// items: [{ code, qty }]. include: the shop the user picked, so it comes back
+// even when it isn't one of the 10 cheapest.
+export const compareBasket = (district, items, include, signal) =>
+  post('/basket', {
+    district, item_codes: items.map((i) => i.code), quantities: items.map((i) => i.qty), include,
+  }, signal)

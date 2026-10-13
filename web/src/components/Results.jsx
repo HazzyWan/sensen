@@ -1,23 +1,12 @@
-import { useEffect, useState } from 'react'
 import { searchItems } from '../api'
-import { useFetch } from '../hooks'
+import { useDebounced, useFetch } from '../hooks'
 import { useLang } from '../i18n'
 import { LABEL_CLASS, nice, rm, shortDate, unitText } from '../format'
 import { ItemIcon } from '../icons'
 
-// Wait until typing pauses before searching, so "ayam" sends one request, not four.
-function useDebounced(value, ms = 250) {
-  const [v, setV] = useState(value)
-  useEffect(() => {
-    const timer = setTimeout(() => setV(value), ms)
-    return () => clearTimeout(timer)
-  }, [value, ms])
-  return v
-}
-
 export function Results({ query, district, selected, onOpen }) {
   const { t } = useLang()
-  const term = useDebounced(query.trim())
+  const term = useDebounced(query.trim()) // search once typing pauses
   const { data, error, loading } = useFetch(
     (signal) => (term.length >= 2 ? searchItems(term, district, signal) : Promise.resolve(null)),
     [term, district],

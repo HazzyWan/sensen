@@ -5,7 +5,7 @@ Find the cheapest shop for an item, see if today's price is low or high compared
 
 **Live app:** https://sensen-xi.vercel.app
 
-**Status:** beta (v0.6.0). Free to use, no account, no ads.
+**Status:** beta (v0.7.0). Free to use, no account, no ads.
 
 <!-- Add your own screenshots to docs/screenshots/ with these names -->
 <p>
@@ -25,7 +25,8 @@ Grocery prices in Malaysia keep going up, and it is hard to tell whether a shop 
 - **Cheapest near you.** Turn on location and see the cheapest shops within 3, 5 or 10 km, with a link to each shop on Google Maps. Distances are worked out on your phone; your location is never sent anywhere.
 - **Your area, automatically.** Tap "Use my location" and SenSen picks your area for you, and follows you when you move. You can also type your neighbourhood ("Ampang", "Cyberjaya") to find it.
 - **Low, Normal or High.** Each item gets a label that compares this week's price with its own last 6 months, so you know if it is a good week to buy.
-- **Basket comparison.** Add up to 30 items and see which single shop is cheapest for all of them, plus how much you would save by splitting the trip.
+- **Basket comparison.** Add up to 30 items with quantities (2 kg chicken, 3 packs of milk) and see which single shop is cheapest for all of them, plus how much you would save by splitting the trip.
+- **Budget planner.** Tap **Start budgeting** in the basket, pick the shop you'll go to, set a budget, and see what's left as you change quantities. In the shop, tick items off as they go in the trolley to see what you've spent so far. Once a budget is set, it floats on screen while you browse (a card on a laptop, a bar above the tabs on a phone) and updates as you add items. Saved on your phone only.
 - **Weekly overview.** Items that are cheaper than usual this week, the biggest price moves, and which shops are cheapest overall in your area.
 - **Works like an app.** Install it to your home screen, use it in English or Bahasa Melayu, and it still shows your last loaded prices when you are offline. It updates itself when a new version is released.
 - **Refreshes itself.** New government price data is picked up every morning, with no manual work.
@@ -74,7 +75,7 @@ flowchart LR
 | "Fresh" price | Within 14 days of the newest date in the data |
 | Price moves | Only items with 3 or more shops in both weeks |
 | Cheapest shops | Each shop's prices compared to the area's typical price (needs at least 10 items) |
-| Basket | Shops that have every item come first, so a shop that is cheaper only because it is missing items does not win |
+| Basket | Each price is multiplied by its quantity. Shops that have every item come first, so a shop that is cheaper only because it is missing items does not win. In the budget planner, an item your shop has no price for is counted at the cheapest price elsewhere and marked ~ |
 | Shop positions | Searched from exact to rough (address, building, street, postcode, town). A shop placed far from the other shops in its own district is searched again inside that district, and marked approximate (~) if only a rough spot is found |
 | Areas | PriceCatcher's districts. Each one is labelled with the neighbourhoods its shops are in (OpenStreetMap's name for each shop's spot, e.g. Kota Damansara), so typing "Ampang" or "Cyberjaya" finds the right district. "Use my location" picks the district of the 5 shops nearest you, worked out on your phone |
 
@@ -177,7 +178,7 @@ The web app talks to `http://127.0.0.1:8000` by default. To point it somewhere e
 - [x] M4: live on Vercel with a daily automatic refresh
 - [x] v0.5: cheapest shops near you (location stays on your phone), self-updating app
 - [x] v0.6: browse by category, new home screen, bottom tab bar on phone, area picked from your location
-- [ ] v0.7: budget planner (pick one shop, set a budget, watch it go down as you add items)
+- [x] v0.7: budget planner (pick one shop, set a budget, quantities, tick items off while shopping)
 - [ ] v0.8: scan an item with the camera to find it (visual search)
 - [ ] v0.9: community prices for items PriceCatcher doesn't cover
 - [ ] v1.0: SenSen assistant, an AI chat that answers from real prices

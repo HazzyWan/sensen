@@ -9,12 +9,12 @@ import os
 import re
 from datetime import date
 from pathlib import Path
-from typing import Literal
+from typing import Annotated, Literal
 
 import pandas as pd
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 # The API reads its own copy of the tables (made by pipeline/ship.py), found
 # next to this file. That way it works from any folder, and api/ can be
@@ -208,20 +208,43 @@ class StoreIndex(BaseModel):
 class BasketRequest(BaseModel):
     district: str = Field(examples=["Petaling"])
     item_codes: list[int] = Field(min_length=1, max_length=30, examples=[[1, 2, 3]])
+    quantities: list[Annotated[float, Field(gt=0, le=100)]] | None = Field(
+        None, examples=[[2, 1, 0.5]],
+        description="How many of each item (kg for per-kg items), in the same order as item_codes. Default 1 each.")
+    include: int | None = Field(
+        None, description="premise_code of a shop to return even if it isn't in the top 10 (the shop the user picked)")
+
+    @model_validator(mode="after")
+    def same_length(self):
+        if self.quantities is not None and len(self.quantities) != len(self.item_codes):
+            raise ValueError("quantities must have one number per item code")
+        return self
 
 
 class BasketLine(BaseModel):
     item_code: int
     name: str
-    price: float
+    price: float = Field(description="Price of one unit at this shop")
+    quantity: float
+    line_total: float = Field(description="price x quantity")
+
+
+class BasketItem(BaseModel):
+    item_code: int
+    name: str
+    unit: str
+    quantity: float
+    cheapest_price: float | None = Field(description="Lowest fresh price of one unit in the district, if any")
+    cheapest_shop: str | None
 
 
 class BasketShop(BaseModel):
+    premise_code: int
     shop: str
     chain: str
     shop_type: str
     complete: bool
-    total: float = Field(description="Sum of the items this shop has")
+    total: float = Field(description="Sum of price x quantity for the items this shop has")
     items_found: int
     missing: list[str]
     lines: list[BasketLine]
@@ -262,6 +285,7 @@ class BasketResult(BaseModel):
     cheapest_mix_total: float = Field(
         description="If you bought each item wherever it is cheapest in the district")
     cheapest_mix_covers: int
+    items: list[BasketItem] = Field(description="Each item asked for, with its cheapest price in the district")
     shops: list[BasketShop]
 
 
@@ -526,41 +550,58 @@ def stores(district: str = Query(description="District from /areas, e.g. 'Petali
 def basket(req: BasketRequest):
     """Which single shop in the district is cheapest for the whole basket.
 
-    Shops that have every item come first, cheapest total first. Shops missing
-    items come after, fewest missing first, and list what they're missing.
+    Each item's price is multiplied by its quantity. Shops that have every item
+    come first, cheapest total first. Shops missing items come after, fewest
+    missing first, and list what they're missing. The top 10 are returned,
+    plus the shop in `include` (the one the user picked) wherever it ranks.
     """
     check_district(req.district)
-    wanted = list(dict.fromkeys(req.item_codes))  # drop duplicates, keep order
+    qty = {}  # item_code -> quantity; a repeated code keeps its first quantity
+    for k, code in enumerate(req.item_codes):
+        qty.setdefault(code, req.quantities[k] if req.quantities else 1.0)
+    wanted = list(qty)
     unknown = sorted(set(wanted) - set(items["item_code"]))
     if unknown:
         raise HTTPException(404, f"Unknown item codes: {unknown}")
-    names = items.set_index("item_code")["item"]
+    info = items.set_index("item_code")
 
-    here = latest[(latest["district"] == req.district) & latest["item_code"].isin(wanted)]
+    here = latest[(latest["district"] == req.district) & latest["item_code"].isin(wanted)].copy()
+    here["quantity"] = here["item_code"].map(qty)
+    here["line_total"] = here["price"] * here["quantity"]
 
     # Baseline: each item bought wherever it is cheapest in the district.
-    best = here.groupby("item_code")["price"].min()
+    cheapest = here.loc[here.groupby("item_code")["price"].idxmin()].set_index("item_code")
+    basket_items = [BasketItem(
+        item_code=int(c), name=info.at[c, "item"], unit=info.at[c, "unit"], quantity=qty[c],
+        cheapest_price=round(float(cheapest.at[c, "price"]), 2) if c in cheapest.index else None,
+        cheapest_shop=cheapest.at[c, "premise"] if c in cheapest.index else None,
+    ) for c in wanted]
+    mix_total = float((cheapest["price"] * cheapest.index.map(qty)).sum())
 
     shops_out = []
-    for (shop, chain, shop_type), g in here.groupby(["premise", "chain", "premise_type"]):
+    for (code, shop, chain, shop_type), g in here.groupby(["premise_code", "premise", "chain", "premise_type"]):
         found = set(g["item_code"])
-        missing = [names[c] for c in wanted if c not in found]
-        lines = [BasketLine(item_code=int(r.item_code), name=names[r.item_code],
-                            price=round(float(r.price), 2))
+        missing = [info.at[c, "item"] for c in wanted if c not in found]
+        lines = [BasketLine(item_code=int(r.item_code), name=info.at[r.item_code, "item"],
+                            price=round(float(r.price), 2), quantity=float(r.quantity),
+                            line_total=round(float(r.line_total), 2))
                  for r in g.sort_values("item_code").itertuples()]
         shops_out.append(BasketShop(
-            shop=shop, chain=chain, shop_type=shop_type, complete=not missing,
-            total=round(float(g["price"].sum()), 2), items_found=len(found),
+            premise_code=int(code), shop=shop, chain=chain, shop_type=shop_type, complete=not missing,
+            total=round(float(g["line_total"].sum()), 2), items_found=len(found),
             missing=missing, lines=lines,
         ))
 
     shops_out.sort(key=lambda s: (len(s.missing), s.total))
+    top = shops_out[:10]
+    top += [s for s in shops_out[10:] if s.premise_code == req.include]
     return BasketResult(
         district=req.district,
         items_requested=len(wanted),
-        cheapest_mix_total=round(float(best.sum()), 2),
-        cheapest_mix_covers=int(best.size),
-        shops=shops_out[:10],
+        cheapest_mix_total=round(mix_total, 2),
+        cheapest_mix_covers=int(cheapest.shape[0]),
+        items=basket_items,
+        shops=top,
     )
 
 
