@@ -3,6 +3,7 @@ import { searchItems } from '../api'
 import { useFetch } from '../hooks'
 import { useLang } from '../i18n'
 import { LABEL_CLASS, nice, rm, shortDate, unitText } from '../format'
+import { ItemIcon } from '../icons'
 
 // Wait until typing pauses before searching, so "ayam" sends one request, not four.
 function useDebounced(value, ms = 250) {
@@ -38,14 +39,16 @@ export function ItemRows({ rows, district, selected, onOpen }) {
     <div className="list">
       {rows.map((r) => (r.cheapest_price == null ? (
         // In PriceCatcher's list, but no recent price here (or anywhere we cover).
-        <button key={r.item_code} className={`li nop ${selected === r.item_code ? 'on' : ''}`} onClick={() => onOpen(r.item_code)}>
+        <button key={r.item_code} className={`li withic nop ${selected === r.item_code ? 'on' : ''}`} onClick={() => onOpen(r.item_code)}>
+          <ItemIcon name={r.name} category={r.category} />
           <span className="t">
             <b>{nice(r.name)}</b>
             <span>{unitText(r.unit, t)} · {r.priced_anywhere ? t('noPriceHere', { d: district }) : t('notPriced')}</span>
           </span>
         </button>
       ) : (
-        <button key={r.item_code} className={`li ${selected === r.item_code ? 'on' : ''}`} onClick={() => onOpen(r.item_code)}>
+        <button key={r.item_code} className={`li withic ${selected === r.item_code ? 'on' : ''}`} onClick={() => onOpen(r.item_code)}>
+          <ItemIcon name={r.name} category={r.category} />
           <span className="t">
             <b>{nice(r.name)}</b>
             <span>{nice(r.cheapest_shop)} · {unitText(r.unit, t)} · {shortDate(r.price_date, lang)}</span>

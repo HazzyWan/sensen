@@ -5,9 +5,9 @@ writes to data/serve/:
   items.parquet          every PriceCatcher item (except cooked food), with
                          English search words, even if no shop here prices it
   latest_prices.parquet  each shop's latest price per item, if fresh
-  areas.parquet          each district's main towns, for the district picker
-  shops.parquet          each shop's name, chain, address and map position
-                         (from pipeline/geocache.csv, made by geocode.py)
+  shops.parquet          each shop's name, chain, address, map position and
+                         neighbourhood (from pipeline/geocache.csv, made by geocode.py)
+  areas.parquet          each district's neighbourhoods, for the area picker
 
 "Fresh" is measured from the newest date in the data, not from today,
 because PriceCatcher is published with a delay.
@@ -17,11 +17,13 @@ Run from the repo root (after clean.py):
 """
 
 import re
+from collections import Counter
 from pathlib import Path
 
 import pandas as pd
 
 from clean import load_items, tidy  # same item list and cooked-food rule as clean.py
+from geocode import split_address  # sorts an address into building, street, neighbourhood
 
 CLEAN_DIR = Path("data/clean")
 SERVE_DIR = Path("data/serve")
@@ -161,7 +163,7 @@ GEOCACHE = Path("pipeline/geocache.csv")
 # after the 5-digit postcode, e.g. "... 40150 SHAH ALAM, SELANGOR" -> "Shah Alam".
 POSTCODE_TOWN = re.compile(r"\b\d{5}\s*,?\s*([A-Z][A-Z .'/-]*?)\s*(?:,|$)")
 STATE_WORDS = re.compile(r"\s+(SELANGOR|W\.?P\.?\s*KUALA LUMPUR|WILAYAH PERSEKUTUAN.*)$")
-NOT_A_HINT = {"KUALA LUMPUR", "SELANGOR"}  # says nothing new about where in the area
+NOT_A_HINT = {"KUALA LUMPUR", "SELANGOR", "WILAYAH PERSEKUTUAN KUALA LUMPUR"}  # says nothing new about where in the area
 TOWNS_PER_AREA = 6  # the picker shows 3 and searches all 6
 
 
@@ -182,29 +184,68 @@ def same_town(name):
     return name.upper().replace("BHARU", "BARU").replace("TANJUNG", "TANJONG")
 
 
-def area_table(latest):
-    """One row per district: region, shop count and its most common towns."""
-    shops = latest[["premise_code", "district", "region"]].drop_duplicates("premise_code")
-    premises = pd.read_parquet(RAW_DIR / "lookup_premise.parquet")[["premise_code", "address"]]
-    shops = shops.merge(premises, on="premise_code", how="left")
-    shops["town"] = shops["address"].map(town_of)
+def neighbourhoods(addresses, district, limit=4):
+    """Neighbourhood names (Taman, Bandar, Kampung, Desa...) from shop addresses.
+
+    Only used when a district has no neighbourhood names from the map yet (see
+    geocode.py). The most common first, at most `limit`, never the district's
+    own name.
+    """
+    counts = Counter()
+    for address in addresses.dropna():
+        for hood in split_address(address)["area"][:1]:
+            if same_town(hood) != same_town(district):
+                counts[hood.title()] += 1
+    return [name for name, _ in counts.most_common(limit)]
+
+
+def ranked(names, district):
+    """Distinct names, most common first, without the district's own name or
+    names that say nothing ('Kuala Lumpur'). Spelling variants count as one."""
+    counts, spelling = Counter(), {}
+    for name in names:
+        if not isinstance(name, str) or not name.strip() or name.strip() == "-":
+            continue
+        key = same_town(name.strip())
+        if key == same_town(district) or key in NOT_A_HINT:
+            continue
+        counts[key] += 1
+        spelling.setdefault(key, Counter())[name.strip()] += 1
+    return [(spelling[k].most_common(1)[0][0], n) for k, n in counts.most_common()]
+
+
+def area_table(latest, shops):
+    """One row per district: region, shop count, hint names and searchable places.
+
+    towns:  up to 6 well-known neighbourhoods, the picker shows the first 3.
+            They come from the map (OpenStreetMap's suburb for each shop's
+            position, e.g. 'Kota Damansara', 'Ara Damansara'), so every
+            district's hints are the same kind of name. Districts whose shops
+            have no map name yet fall back to the town after the postcode, then
+            to the Taman/Bandar in the address.
+    places: every neighbourhood and town in the district, so typing 'Ampang'
+            or 'Cyberjaya' finds the district it belongs to.
+    """
+    fresh = shops[shops["premise_code"].isin(latest["premise_code"])].copy()
+    fresh["town"] = fresh["address"].map(town_of)
 
     rows = []
-    for (district, region), g in shops.groupby(["district", "region"]):
-        named = g.dropna(subset=["town"]).copy()
-        named["key"] = named["town"].map(same_town)
-        # Count each town once across spellings; show its most common spelling.
-        counts = named.groupby("key").agg(n=("town", "size"), name=("town", lambda s: s.mode()[0]))
-        counts = counts.sort_values("n", ascending=False)
-        towns = [r.name for r in counts.itertuples()
-                 if r.n >= 2 and r.Index != same_town(district)]
+    for (district, region), g in fresh.groupby(["district", "region"]):
+        suburbs = ranked(g["suburb"], district)
+        towns = ranked(g["town"], district)
+        hints = [name for name, _ in suburbs]
+        if not hints:
+            hints = [name for name, n in towns if n >= 2] or neighbourhoods(g["address"], district)
+        places = list(dict.fromkeys(  # keeps order, drops repeats
+            [name for name, _ in suburbs] + [name for name, _ in towns] + hints))
         rows.append({"district": district, "region": region, "shops": len(g),
-                     "towns": "|".join(towns[:TOWNS_PER_AREA])})
+                     "towns": "|".join(hints[:TOWNS_PER_AREA]), "places": "|".join(places)})
     return pd.DataFrame(rows)
 
 
 def shop_table(prices):
-    """One row per shop: name, chain, type, area, address and map position.
+    """One row per shop: name, chain, type, area, address, map position and
+    neighbourhood name (suburb).
 
     precision says how exact the position is (see geocode.py); shops with no
     position yet get precision "none" and are left out of "near me".
@@ -217,12 +258,18 @@ def shop_table(prices):
     addresses["address"] = tidy(addresses["address"])
     shops = shops.merge(addresses, on="premise_code", how="left")
     if GEOCACHE.exists():
-        geo = pd.read_csv(GEOCACHE, usecols=["premise_code", "lat", "lon", "precision"])
-        shops = shops.merge(geo, on="premise_code", how="left")
+        geo = pd.read_csv(GEOCACHE, dtype={"suburb": "string"})
+        if "suburb" not in geo:  # cache made before neighbourhood names existed
+            geo["suburb"] = pd.NA
+        shops = shops.merge(geo[["premise_code", "lat", "lon", "precision", "suburb"]],
+                            on="premise_code", how="left")
     else:
         shops["lat"] = shops["lon"] = float("nan")
         shops["precision"] = None
+        shops["suburb"] = pd.NA
     shops["precision"] = shops["precision"].fillna("none")
+    # "-" in the cache means "looked up, no name"; the app just sees no name.
+    shops["suburb"] = shops["suburb"].replace("-", pd.NA).astype("string")
     return shops
 
 
@@ -252,11 +299,11 @@ def main():
     latest["chain"] = [chain_of(n, t) for n, t in zip(latest["premise"], latest["premise_type"])]
     latest.to_parquet(SERVE_DIR / "latest_prices.parquet", index=False)
 
-    areas = area_table(latest)
-    areas.to_parquet(SERVE_DIR / "areas.parquet", index=False)
-
     shops = shop_table(prices)
     shops.to_parquet(SERVE_DIR / "shops.parquet", index=False)
+
+    areas = area_table(latest, shops)
+    areas.to_parquet(SERVE_DIR / "areas.parquet", index=False)
 
     priced = items["item_code"].isin(latest["item_code"]).sum()
     print(f"Items: {len(items)} tracked, {priced} with a fresh price somewhere in Selangor or KL")
@@ -272,7 +319,8 @@ def main():
         cats = g.groupby("item_category").size().sort_values(ascending=False)
         print(f"  {group} = {GROUP_EN.get(group, '?')} ({len(g)}): " + ", ".join(
             f"{c}{' = ' + category_en(c) if category_en(c) else ''} {n}" for c, n in cats.items()))
-    print("Areas and their main towns:")
+    named = shops["suburb"].notna().sum()
+    print(f"Areas and their main neighbourhoods ({named} of {len(shops)} shops have a map name):")
     for r in areas.itertuples():
         print(f"  {r.region:13} {r.district:16} {r.shops:>3} shops  {r.towns.replace('|', ', ')}")
     print("Shops per chain:")

@@ -2,6 +2,7 @@ import { getDeals, getMovers, getStores } from '../api'
 import { useFetch } from '../hooks'
 import { useLang } from '../i18n'
 import { nice, pct, rm, unitText } from '../format'
+import { ItemIcon } from '../icons'
 
 // "Low this week": items priced below their usual range that you can buy nearby.
 export function Deals({ district, selected, onOpen, limit }) {
@@ -15,7 +16,8 @@ export function Deals({ district, selected, onOpen, limit }) {
       {data && data.length > 0 && (
         <div className="list">
           {data.slice(0, limit).map((d) => (
-            <button key={d.item_code} className={`li ${selected === d.item_code ? 'on' : ''}`} onClick={() => onOpen(d.item_code)}>
+            <button key={d.item_code} className={`li withic ${selected === d.item_code ? 'on' : ''}`} onClick={() => onOpen(d.item_code)}>
+              <ItemIcon name={d.name} />
               <span className="t">
                 <b>{nice(d.name)}</b>
                 <span>{nice(d.cheapest_shop)} · {unitText(d.unit, t)}</span>
@@ -74,7 +76,7 @@ export function Stores({ district, limit }) {
   const rows = limit ? data.slice(0, limit) : data
   const span = Math.max(5, ...rows.map((r) => Math.abs(r.vs_district_pct)))
   return (
-    <section className="sec">
+    <section className="sec" id="stores">
       <div className="sechead"><h2>{t('storesTitle', { d: district })}</h2><span className="muted small">{t('storesSub')}</span></div>
       {rows.length === 0 && <p className="empty">{t('storesNone')}</p>}
       <div className="card">

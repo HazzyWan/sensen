@@ -3,7 +3,7 @@ import { useLang } from '../i18n'
 import { shortDate } from '../format'
 import { AreaPicker } from './AreaPicker'
 
-export function Header({ areas, district, onDistrict, query, onQuery, meta, wide, tab, go }) {
+export function Header({ areas, district, onDistrict, auto, onAuto, outside, query, onQuery, meta, wide, tab, go }) {
   const { t, lang } = useLang()
   const week = meta && <span className="pill soft">{t('weekOf', { w: shortDate(meta.latest_week, lang) })}</span>
   const basket = <BasketButton onClick={go.basket} />
@@ -21,7 +21,7 @@ export function Header({ areas, district, onDistrict, query, onQuery, meta, wide
         <div className="row brand-row">
           {wide && <span className="brand">Sen<span>Sen</span></span>}
           {wide && <span className="beta">{t('beta')}</span>}
-          <AreaPicker areas={areas} value={district} onChange={onDistrict} />
+          <AreaPicker areas={areas} value={district} onChange={onDistrict} auto={auto} onAuto={onAuto} outside={outside} />
           {wide && week}
         </div>
         {!wide && <LangToggle />}

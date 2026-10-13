@@ -29,9 +29,10 @@ def test_health():
     assert client.get("/health").json() == {"status": "ok"}
 
 
-def test_meta_has_both_regions():
+def test_meta_has_the_regions_we_cover():
     meta = client.get("/meta").json()
-    assert meta["regions"] == ["Kuala Lumpur", "Selangor"]
+    # Putrajaya is small: it may have no fresh prices in some weeks.
+    assert {"Kuala Lumpur", "Selangor"} <= set(meta["regions"]) <= {"Kuala Lumpur", "Putrajaya", "Selangor"}
     assert meta["weeks"] >= 8
 
 
@@ -53,12 +54,14 @@ def test_search_english_word_matches_malay_name(district):
     results = client.get("/items/search", params={"q": "chicken", "district": district}).json()
     assert any("AYAM" in r["name"] for r in results)
 
+
 def test_search_bread_finds_roti_and_lists_priced_first(district):
     results = client.get("/items/search", params={"q": "bread", "district": district}).json()
     assert any("ROTI" in r["name"] for r in results), "PriceCatcher has ROTI items"
     priced = [r["cheapest_price"] is not None for r in results]
     assert priced == sorted(priced, reverse=True), "items without a price here come last"
- 
+
+
 def test_search_too_short_is_422(district):
     r = client.get("/items/search", params={"q": "a", "district": district})
     assert r.status_code == 422
@@ -115,6 +118,8 @@ def test_basket_rejects_bad_input(district):
                                         "item_codes": list(range(1, 32))}).status_code == 422
     assert client.post("/basket", json={"district": district,
                                         "item_codes": [999999]}).status_code == 404
+
+
 # ---------- browse by category ----------
 
 def test_categories_add_up(district):
@@ -138,6 +143,7 @@ def test_browse_unknown_category_is_404(district):
     r = client.get("/browse", params={"district": district, "category": "NOT A CATEGORY"})
     assert r.status_code == 404
 
+
 # ---------- prices with map positions (for "near me") ----------
 
 def test_item_prices_cheapest_first_with_positions_in_selangor_kl():
@@ -153,6 +159,7 @@ def test_item_prices_cheapest_first_with_positions_in_selangor_kl():
 def test_item_prices_unknown_item_is_404():
     assert client.get("/items/999999/prices").status_code == 404
 
+
 # ---------- areas ----------
 
 def test_areas_have_town_hints():
@@ -160,6 +167,17 @@ def test_areas_have_town_hints():
     assert all(isinstance(a["towns"], list) for a in areas)
     # A district never lists itself as its own town hint.
     assert all(a["district"].lower() not in [t.lower() for t in a["towns"]] for a in areas)
+
+
+def test_areas_places_include_hints_and_points_are_in_selangor_kl():
+    areas = client.get("/areas").json()
+    for a in areas:
+        # Every hint shown is also searchable.
+        assert set(a["towns"]) <= set(a["places"])
+        for lat, lon in a["points"]:
+            assert 2.5 < lat < 3.9 and 100.7 < lon < 102.1
+    # Most areas have shops on the map, so "use my location" can pick one.
+    assert sum(bool(a["points"]) for a in areas) >= len(areas) * 0.8
 
 
 # ---------- movers and deals ----------

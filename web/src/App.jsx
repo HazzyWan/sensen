@@ -3,26 +3,32 @@ import { getAreas, getMeta } from './api'
 import { useFetch, useOnline, useRoute, useWide } from './hooks'
 import { shortDate } from './format'
 import { useLang } from './i18n'
+import { useNearMe } from './LocationContext'
+import { nearestArea } from './geo'
 import { Header } from './components/Header'
+import { UseLocation } from './components/AreaPicker'
 import { Results } from './components/Results'
 import { Deals, Movers, Stores } from './components/Dashboard'
+import { DealCards, QuickTiles, Spotlight } from './components/Home'
 import { ItemDetail } from './components/ItemDetail'
 import { Basket } from './components/Basket'
 import { Browse } from './components/Browse'
 import { TabBar } from './components/TabBar'
 
 const DISTRICT_KEY = 'sensen.district'
+const AUTO_KEY = 'sensen.areaAuto' // "on": the area follows the user's location
 
 // localStorage can throw (private mode, blocked storage), so every access is guarded.
-const loadDistrict = () => { try { return localStorage.getItem(DISTRICT_KEY) ?? '' } catch { return '' } }
-const saveDistrict = (d) => { try { localStorage.setItem(DISTRICT_KEY, d) } catch { /* still works, just not remembered */ } }
+const load = (key) => { try { return localStorage.getItem(key) ?? '' } catch { return '' } }
+const save = (key, value) => { try { localStorage.setItem(key, value) } catch { /* still works, just not remembered */ } }
 
 export default function App() {
   const { t, lang } = useLang()
   const wide = useWide(900)
   const meta = useFetch((s) => getMeta(s), []).data
   const { data: areas, error } = useFetch((s) => getAreas(s), [])
-  const [district, setDistrict] = useState(loadDistrict)
+  const [district, setDistrict] = useState(() => load(DISTRICT_KEY))
+  const [auto, setAuto] = useState(() => load(AUTO_KEY) === 'on')
   const [query, setQuery] = useState('')
   const [route, go] = useRoute()
   const online = useOnline()
@@ -41,6 +47,7 @@ export default function App() {
     if (route.view === 'browse') setBrowseCat(route.category)
   }
   const tab = route.view === 'item' ? from : route.view
+  const toRanking = () => document.getElementById('stores')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   const back = () => (from === 'browse' ? go.browse(browseCat) : from === 'basket' ? go.basket() : go.home())
 
   // A saved district that no longer exists in the data is cleared.
@@ -48,12 +55,27 @@ export default function App() {
     if (areas && district && !areas.some((a) => a.district === district)) setDistrict('')
   }, [areas, district])
 
-  const pickDistrict = (d) => { setDistrict(d); saveDistrict(d); if (route.view === 'item') go.home() }
+  // "Auto": the area nearest the user, worked out on this device from the
+  // shops around them. Used when the user chose it, or when location is
+  // already on (from "near me") and no area has been picked yet.
+  const near = useNearMe()
+  const here = areas && near.status === 'on' && near.coords ? nearestArea(areas, near.coords) : null
+  const outside = Boolean(areas && near.coords && !here)
+  if (here && (auto || !district) && here.district !== district) {
+    setDistrict(here.district)
+    if (!auto) setAuto(true)
+  }
+  useEffect(() => { save(DISTRICT_KEY, district) }, [district])
+  useEffect(() => { save(AUTO_KEY, auto ? 'on' : '') }, [auto])
+
+  const pickDistrict = (d) => { setDistrict(d); setAuto(false); if (route.view === 'item') go.home() }
+  const autoArea = () => { setAuto(true); if (near.status !== 'on') near.start() }
   const shops = areas?.find((a) => a.district === district)?.shops
 
   const banner = !online && <div className="offline" role="status">{t('offline')}</div>
   const header = (
     <>{banner}<Header areas={areas ?? []} district={district} onDistrict={pickDistrict}
+      auto={auto} onAuto={autoArea} outside={outside}
       query={query} onQuery={setQuery} meta={meta} wide={wide} tab={tab} go={go} /></>
   )
   const footer = (
@@ -65,7 +87,12 @@ export default function App() {
   )
 
   if (error) return <div className="app"><main className="screen">{header}<p className="empty">{t('apiError', { e: error })}</p></main></div>
-  const choose = <p className="empty">{t('choose')}</p>
+  const choose = (
+    <div className="choose">
+      <p className="empty">{t('choose')}</p>
+      {areas && <UseLocation auto={auto} outside={outside} onClick={autoArea} big />}
+    </div>
+  )
 
   // ---------- Laptop: list on the left, detail / basket / overview on the right ----------
   if (wide) {
@@ -83,6 +110,8 @@ export default function App() {
               {t('overviewSub', { n: shops, w: meta ? shortDate(meta.latest_week, lang) : '…' })}
             </p>
           </div>
+          <QuickTiles onCategory={go.browse} wide />
+          <Spotlight district={district} onRanking={toRanking} />
           <Movers district={district} onOpen={go.item} columns />
           <Stores district={district} />
         </div>
@@ -121,7 +150,9 @@ export default function App() {
   else if (route.view === 'browse') body = <Browse district={district} category={browseCat} onCategory={go.browse} onOpen={go.item} />
   else body = (
     <>
-      <Deals district={district} onOpen={go.item} limit={5} />
+      <QuickTiles onCategory={go.browse} />
+      <Spotlight district={district} onRanking={toRanking} />
+      <DealCards district={district} onOpen={go.item} />
       <Movers district={district} onOpen={go.item} />
       <Stores district={district} limit={5} />
     </>

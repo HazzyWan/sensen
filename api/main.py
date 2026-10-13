@@ -5,6 +5,7 @@ Run from the repo root (after pipeline/run.py):
 Then open http://127.0.0.1:8000/docs
 """
 
+import os
 import re
 from datetime import date
 from pathlib import Path
@@ -14,10 +15,6 @@ import pandas as pd
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
-
-import os
-import re
-from datetime import date
 
 # The API reads its own copy of the tables (made by pipeline/ship.py), found
 # next to this file. That way it works from any folder, and api/ can be
@@ -53,6 +50,16 @@ latest = pd.read_parquet(DATA_DIR / "latest_prices.parquet")
 movers = pd.read_parquet(DATA_DIR / "movers.parquet")
 area_rows = pd.read_parquet(DATA_DIR / "areas.parquet").sort_values(["region", "district"])
 shops = pd.read_parquet(DATA_DIR / "shops.parquet")
+if "suburb" not in shops:  # data made before neighbourhood names existed
+    shops["suburb"] = None
+if "places" not in area_rows:
+    area_rows["places"] = area_rows["towns"]
+
+# district -> [(lat, lon), ...] of its shops with a map position. The app finds
+# the area nearest the user from these, on the phone, so the location never
+# reaches this server.
+POINTS = {d: [(round(float(r.lat), 4), round(float(r.lon), 4)) for r in g.itertuples()]
+          for d, g in shops[shops["precision"] != "none"].dropna(subset=["lat", "lon"]).groupby("district")}
 
 # district -> region, e.g. "Petaling" -> "Selangor"
 DISTRICT_REGION = (latest[["district", "region"]].drop_duplicates()
@@ -93,7 +100,10 @@ class Area(BaseModel):
     district: str
     region: str
     shops: int
-    towns: list[str] = Field(description="Main towns in the area, from shop addresses")
+    towns: list[str] = Field(description="Main neighbourhoods, to show as a hint (first 3) and search")
+    places: list[str] = Field(description="Every neighbourhood and town in the area, for search")
+    points: list[tuple[float, float]] = Field(
+        description="(lat, lon) of the area's shops, so the app can pick the nearest area on the phone")
 
 
 class SearchResult(BaseModel):
@@ -112,6 +122,7 @@ class SearchResult(BaseModel):
     label: Label | None
     label_scope: Literal["district", "region"] | None
 
+
 class Category(BaseModel):
     category: str
     category_en: str | None
@@ -125,6 +136,7 @@ class Group(BaseModel):
     items: int
     priced: int
     categories: list[Category]
+
 
 class LabelInfo(BaseModel):
     label: Label
@@ -145,11 +157,13 @@ class ShopPrice(BaseModel):
     price_date: date
     more_than_cheapest: float
 
+
 class ShopLocated(BaseModel):
     shop: str
     chain: str
     shop_type: str
     district: str
+    suburb: str | None = Field(description="Neighbourhood from the map, e.g. 'Kota Damansara'")
     address: str | None
     price: float
     price_date: date
@@ -294,7 +308,9 @@ def meta():
 def areas():
     """Districts the app can show, for the district picker."""
     return [Area(district=r.district, region=r.region, shops=int(r.shops),
-                 towns=[t for t in r.towns.split("|") if t])
+                 towns=[t for t in r.towns.split("|") if t],
+                 places=[p for p in (r.places or "").split("|") if p],
+                 points=POINTS.get(r.district, []))
             for r in area_rows.itertuples()]
 
 
@@ -339,7 +355,7 @@ def results_for(found, district, region):
     results = []
     for it in found.itertuples():
         base = dict(item_code=it.item_code, name=it.item, unit=it.unit, category=it.item_category,
-            category_en=None if pd.isna(it.category_en) else it.category_en)
+                    category_en=None if pd.isna(it.category_en) else it.category_en)
         if it.item_code not in cheapest.index:
             results.append(((1, it.relevance), SearchResult(
                 **base, cheapest_price=None, cheapest_shop=None, cheapest_chain=None,
@@ -395,6 +411,7 @@ def browse(
         raise HTTPException(404, f"Unknown category {category!r}.")
     return results_for(found, district, region)
 
+
 @app.get("/items/{item_code}/prices", response_model=list[ShopLocated])
 def item_prices(item_code: int):
     """Every fresh price for one item across Selangor and KL, cheapest first,
@@ -406,18 +423,20 @@ def item_prices(item_code: int):
     if not (items["item_code"] == item_code).any():
         raise HTTPException(404, f"Unknown item code {item_code}.")
     here = latest[latest["item_code"] == item_code].merge(
-        shops[["premise_code", "address", "lat", "lon", "precision"]], on="premise_code", how="left")
+        shops[["premise_code", "address", "lat", "lon", "precision", "suburb"]], on="premise_code", how="left")
     here = here.sort_values(["price", "premise"])
 
     def num(v):
         return None if pd.isna(v) else round(float(v), 6)
 
     return [ShopLocated(shop=r.premise, chain=r.chain, shop_type=r.premise_type, district=r.district,
+                        suburb=None if pd.isna(r.suburb) else r.suburb,
                         address=None if pd.isna(r.address) else r.address,
                         price=round(float(r.price), 2), price_date=r.date.date(),
                         lat=num(r.lat), lon=num(r.lon),
                         location="none" if pd.isna(r.precision) else r.precision)
             for r in here.itertuples()]
+
 
 @app.get("/items/{item_code}", response_model=ItemDetail)
 def item_detail(

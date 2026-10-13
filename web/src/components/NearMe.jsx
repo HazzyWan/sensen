@@ -77,6 +77,7 @@ function NearList({ code, here, radius, setRadius }) {
             <span className="t">
               <b>{nice(s.shop)}</b>
               <span>
+                {s.suburb && <>{s.suburb} · </>}
                 {s.location === 'address' ? '' : '~'}{kmText(s.km)}
                 {s.km === nearestKm && <> · <span className="near-tag">{t('nearest')}</span></>}
                 {' · '}<a className="maplink" href={mapsLink(s)} target="_blank" rel="noopener noreferrer">{t('openMaps')}</a>

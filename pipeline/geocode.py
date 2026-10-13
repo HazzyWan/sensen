@@ -9,6 +9,8 @@ Nominatim's rules (https://operations.osmfoundation.org/policies/nominatim/):
   - at most 1 request a second, one at a time, and cache every answer
   - scheduled jobs: at most 4 requests a minute (here: 60 requests per run)
   - send a User-Agent that says who we are
+It also looks up each shop's neighbourhood name ("Kota Damansara") from its
+position, once, for the area picker.
 So the first run takes a while (roughly 15 to 40 minutes). It saves after every
 shop, so you can stop it with Ctrl+C and run it again to continue.
 
@@ -31,13 +33,14 @@ import requests
 from clean import CLEAN_DIR, load_premises
 
 CACHE = Path("pipeline/geocache.csv")
-FIELDS = ["premise_code", "address", "lat", "lon", "precision", "query", "strategy", "checked"]
+FIELDS = ["premise_code", "address", "lat", "lon", "precision", "query", "strategy", "checked", "suburb"]
 
 # Bump this when locate() learns new tricks: shops that found nothing with an
 # older strategy are tried once more. Shops that were found are never redone.
 STRATEGY = 3
 
 URL = "https://nominatim.openstreetmap.org/search"
+REVERSE_URL = "https://nominatim.openstreetmap.org/reverse"
 HEADERS = {"User-Agent": "SenSen/0.5 (grocery price app; https://github.com/HazzyWan/sensen)"}
 
 # On GitHub Actions (CI=true) we are a scheduled job: 4 requests a minute, and
@@ -102,23 +105,46 @@ def split_address(address):
     return parts
 
 
-def ask(params):
-    """One Nominatim request. Returns (lat, lon) inside Selangor/KL, or None."""
+def request(url, params):
+    """One Nominatim request, within the rules: a pause first, and a budget in CI."""
     global requests_made
     if MAX_REQUESTS is not None and requests_made >= MAX_REQUESTS:
         raise OutOfRequests
     requests_made += 1
     time.sleep(PAUSE)
-    resp = requests.get(URL, params={**params, "format": "jsonv2", "countrycodes": "my", "limit": 1},
-                        headers=HEADERS, timeout=30)
+    resp = requests.get(url, params={**params, "format": "jsonv2"}, headers=HEADERS, timeout=30)
     resp.raise_for_status()
-    hits = resp.json()
+    return resp.json()
+
+
+def ask(params):
+    """One search. Returns (lat, lon) inside Selangor/KL, or None."""
+    hits = request(URL, {**params, "countrycodes": "my", "limit": 1})
     if not hits:
         return None
     lat, lon = float(hits[0]["lat"]), float(hits[0]["lon"])
     if LAT_RANGE[0] <= lat <= LAT_RANGE[1] and LON_RANGE[0] <= lon <= LON_RANGE[1]:
         return lat, lon
     return None
+
+
+# Numbered sections ("Seksyen 7", "Presint 9") are real, but people say the town
+# ("Shah Alam", "Putrajaya"), so those fall through to the next, bigger name.
+NOT_A_SUBURB = re.compile(r"^(SEKSYEN|SECTION|PRESINT|PRECINCT|JALAN)\b|^\d", re.IGNORECASE)
+
+
+def suburb_of(lat, lon):
+    """The standard neighbourhood name OpenStreetMap gives a point, e.g. 'Kota Damansara'.
+
+    This is "reverse geocoding": a position in, a place name out. "-" if none.
+    """
+    hit = request(REVERSE_URL, {"lat": lat, "lon": lon, "zoom": 16, "addressdetails": 1})
+    address = hit.get("address", {}) if isinstance(hit, dict) else {}
+    for key in ("suburb", "quarter", "neighbourhood", "city_district", "village", "town", "city"):
+        name = address.get(key)
+        if name and not NOT_A_SUBURB.match(name):
+            return name
+    return "-"
 
 
 def locate(shop, bounds=None):
@@ -273,6 +299,20 @@ def main():
             save(cache)
             changed = True
             print(f"  {shop.premise[:38]:38} {away:4.1f} km out (limit {limit:.0f}) {verdict}")
+
+        # Third pass: the standard neighbourhood name of each shop's spot, for
+        # the area picker. Only for shops placed closer than "somewhere in town".
+        named = [s for s in shops.itertuples()
+                 if not cache[s.premise_code].get("suburb")
+                 and cache[s.premise_code]["precision"] in ("address", "street", "postcode")]
+        if named:
+            print(f"\nLooking up the neighbourhood of {len(named)} shops:")
+        for n, shop in enumerate(named, 1):
+            r = cache[shop.premise_code]
+            r["suburb"] = suburb_of(r["lat"], r["lon"])
+            save(cache)
+            changed = True
+            print(f"  [{n}/{len(named)}] {r['suburb']:28} {shop.premise[:40]}")
     except OutOfRequests:
         print("  Request limit for this run reached; the rest waits for the next run.")
     except requests.RequestException as e:

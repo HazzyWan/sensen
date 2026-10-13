@@ -15,7 +15,9 @@ RAW_DIR = Path("data/raw")
 CLEAN_DIR = Path("data/clean")
 
 # Exact spellings from the data (checked with explore.py).
-STATES = {"Selangor": "Selangor", "W.P. Kuala Lumpur": "Kuala Lumpur"}
+# PriceCatcher's state name -> the region name the app shows. Matched ignoring
+# dots, spaces and case, so "W.P. Putrajaya" and "WP Putrajaya" both work.
+STATES = {"Selangor": "Selangor", "W.P. Kuala Lumpur": "Kuala Lumpur", "W.P. Putrajaya": "Putrajaya"}
 
 # Shops that sell groceries. Restaurants, food courts and medan selera are left out.
 GROCERY_TYPES = [
@@ -44,6 +46,11 @@ def match_key(s):
     return s.str.replace(" ", "", regex=False).str.lower()
 
 
+def state_key(s):
+    """'W.P. Kuala Lumpur' -> 'wpkualalumpur', so spelling details don't matter."""
+    return s.str.lower().str.replace(r"[^a-z]", "", regex=True)
+
+
 def load_premises():
     p = pd.read_parquet(RAW_DIR / "lookup_premise.parquet")
     for col in ["premise", "address", "premise_type", "state", "district"]:
@@ -51,12 +58,13 @@ def load_premises():
     p = p[p["premise_code"] > 0]  # -1 is a placeholder "Unknown Premise"
 
     wanted = set(match_key(pd.Series(GROCERY_TYPES)))
-    p = p[p["state"].isin(STATES.keys()) & match_key(p["premise_type"]).isin(wanted)].copy()
+    region = state_key(p["state"]).map({state_key(pd.Series([k]))[0]: v for k, v in STATES.items()})
+    p = p.assign(region=region)
+    p = p[p["region"].notna() & match_key(p["premise_type"]).isin(wanted)].copy()
 
     # Store one consistent spelling of each premise type.
     canonical = dict(zip(match_key(pd.Series(GROCERY_TYPES)), GROCERY_TYPES))
     p["premise_type"] = match_key(p["premise_type"]).map(canonical)
-    p["region"] = p["state"].map(STATES)
     return p
 
 
@@ -95,9 +103,9 @@ def main():
 
     premises = load_premises()
     items = load_items()
-    print(f"Shops kept: {len(premises)} "
-          f"({(premises.region == 'Selangor').sum()} Selangor, "
-          f"{(premises.region == 'Kuala Lumpur').sum()} KL)")
+    per_region = premises["region"].value_counts()
+    print(f"Shops kept: {len(premises)} ("
+          + ", ".join(f"{per_region.get(r, 0)} {r}" for r in STATES.values()) + ")")
     print(f"Items kept: {len(items)} (cooked food removed)")
 
     print("Reading prices:")
