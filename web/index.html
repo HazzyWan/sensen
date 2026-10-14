@@ -4,12 +4,38 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>SenSen: grocery prices near you</title>
-    <meta name="description" content="Compare grocery prices across shops in Selangor and Kuala Lumpur, from KPDN's PriceCatcher data." />
+    <meta name="description" content="Compare grocery prices across shops in Selangor, Kuala Lumpur and Putrajaya, from KPDN's PriceCatcher data." />
     <meta name="theme-color" content="#ffffff" />
     <link rel="icon" type="image/svg+xml" href="/icon.svg" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <!-- Opening screen on phones: shown straight away by the browser (before the
+         app's code loads), then removed by main.jsx. Once per visit, phones only. -->
+    <style>
+      #splash { position: fixed; inset: 0; z-index: 100; display: none; place-items: center; align-content: center; gap: 14px;
+        background: #ffffff; color: #191b22; font-family: "Sora", ui-sans-serif, system-ui, sans-serif; text-align: center; }
+      #splash img { width: 84px; height: 84px; border-radius: 22px; }
+      #splash .name { font-size: 34px; font-weight: 800; letter-spacing: -.03em; }
+      #splash .name span { color: #ff5b22; }
+      #splash .beta { display: inline-block; margin-left: 8px; vertical-align: middle; padding: 3px 9px; border-radius: 99px;
+        font-size: 12px; font-weight: 800; letter-spacing: .08em; background: #fff0e9; color: #ff5b22; }
+      #splash .tag { font-size: 14px; color: #6b6e78; }
+      @media (prefers-color-scheme: dark) {
+        #splash { background: #111318; color: #eef0f5; }
+        #splash .beta { background: #3a1f14; color: #ff6a33; }
+        #splash .tag { color: #9a9ea9; }
+      }
+      @media (max-width: 899px) { html:not(.splash-seen) #splash { display: grid; } }
+    </style>
+    <script>
+      try { if (sessionStorage.getItem('sensen.splash')) document.documentElement.classList.add('splash-seen') } catch (e) { /* show it */ }
+    </script>
   </head>
   <body>
+    <div id="splash" aria-hidden="true">
+      <img src="/icon-192.png" alt="" />
+      <div class="name">Sen<span>Sen</span><span class="beta">BETA</span></div>
+      <div class="tag">Grocery prices near you</div>
+    </div>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>

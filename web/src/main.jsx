@@ -32,3 +32,15 @@ createRoot(document.getElementById('root')).render(
     </LangProvider>
   </StrictMode>,
 )
+
+// The opening screen (in index.html) stays for at least a second on phones,
+// then goes. It is shown once per visit: reopening the tab later skips it.
+const splash = document.getElementById('splash')
+if (splash) {
+  const SHOW_MS = 1000
+  const wait = Math.max(0, SHOW_MS - performance.now())
+  setTimeout(() => {
+    splash.remove()
+    try { sessionStorage.setItem('sensen.splash', '1') } catch { /* fine */ }
+  }, wait)
+}
