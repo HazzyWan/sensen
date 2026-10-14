@@ -184,6 +184,7 @@ The web app talks to `http://127.0.0.1:8000` by default. To point it somewhere e
 - [ ] v1.0: SenSen assistant, an AI chat that answers from real prices
 - [ ] v1.1: a SenSen mascot and a first-run tour that highlights each button and tab and explains it
 - [ ] v1.2: price alerts for items you buy often ("ayam is Low this week")
+- [ ] Any time: all of Malaysia (every state PriceCatcher covers, about 3,000 grocery shops)
 
 ---
 
