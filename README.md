@@ -186,6 +186,21 @@ The web app talks to `http://127.0.0.1:8000` by default. To point it somewhere e
 
 ---
 
+## Limits of the data
+
+PriceCatcher is the best free source of real shelf prices in Malaysia, but it doesn't cover everything. SenSen says so instead of hiding it (figures checked in October 2026):
+
+- **Not every shop is included.** KPDN checks a sample: 483 grocery shops in Selangor, KL and Putrajaya (Selangor 183, KL 260, Putrajaya 40), with only 6 kedai runcit in all of Selangor. Many supermarkets are missing too: around Mutiara Damansara, for example, neither Lotus's Mutiara Damansara nor 1K Plus Market at The Curve is in the data. So "cheapest near you" means cheapest among the shops PriceCatcher checks.
+- **A fixed list of items.** 606 grocery items are listed, but only about half get prices (302 in Selangor, KL and Putrajaya in one October week), and a typical shop prices about 100. Many packaged goods are missing, and some listed items (packaged bread, for one) have had no prices at all lately. SenSen shows these as "Not priced by PriceCatcher lately".
+- **Specific products and sizes.** Each item is one product in one size; other brands and sizes on the same shelf are not covered.
+- **Not every shop prices every item, every week**, and prices reach the open data about two weeks after they are checked. SenSen only uses prices from the last 14 days of the data and shows the date of each.
+- **Promotions and member prices may be missed.**
+- **Addresses only, no map positions.** SenSen finds positions with OpenStreetMap; approximate ones are marked ~.
+
+Community prices (v0.9 on the roadmap) are the plan for filling these gaps.
+
+---
+
 ## Data and credits
 
 Prices come from **PriceCatcher** by the Ministry of Domestic Trade and Cost of Living (KPDN), published on [data.gov.my](https://data.gov.my/data-catalogue/pricecatcher) with DOSM under the **CC BY 4.0** licence. SenSen is an independent project and is not connected to KPDN or DOSM. Prices are reported with a delay of about two weeks, so always check the shelf price.
