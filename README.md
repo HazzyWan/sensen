@@ -181,9 +181,9 @@ The web app talks to `http://127.0.0.1:8000` by default. To point it somewhere e
 - [x] v0.7: budget planner (pick one shop, set a budget, quantities, tick items off while shopping)
 - [ ] v0.8: scan an item with the camera to find it (visual search)
 - [ ] v0.9: community prices for items PriceCatcher doesn't cover
-- [ ] v1.0: SenSen assistant, an AI chat that answers from real prices
+- [ ] v1.0: SenSen assistant, an AI chat that answers from real prices, including recipes ("I want to bake a cake": ingredients, cheapest shops, add all to basket)
 - [ ] v1.1: a SenSen mascot and a first-run tour that highlights each button and tab and explains it
-- [ ] v1.2: price alerts for items you buy often ("ayam is Low this week")
+- [ ] v1.2: smart price alerts that learn your habits ("You usually check ayam on Saturdays: it's Low this week")
 - [ ] Any time: all of Malaysia (every state PriceCatcher covers, about 3,000 grocery shops)
 
 ---
