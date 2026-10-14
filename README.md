@@ -1,6 +1,6 @@
 # SenSen
 
-**Grocery prices near you, for Selangor, Kuala Lumpur and Putrajaya.**
+**Grocery prices near you, anywhere in Malaysia.**
 Find the cheapest shop for an item, see if today's price is low or high compared to usual, and work out which shop is cheapest for your whole basket.
 
 **Live app:** https://sensen-xi.vercel.app
@@ -51,7 +51,7 @@ It then opens in its own window with the SenSen icon, like any other app.
 flowchart LR
     A["data.gov.my<br/>PriceCatcher<br/>(Parquet files)"] -->|download| B["pipeline/<br/>clean, weekly,<br/>geocode, publish"]
     H["OpenStreetMap<br/>Nominatim"] -.->|shop positions,<br/>looked up once| B
-    B -->|7 small tables, ~0.5 MB| C["api/<br/>FastAPI"]
+    B -->|7 small tables, a few MB| C["api/<br/>FastAPI"]
     C -->|JSON| D["web/<br/>React PWA"]
     E["GitHub Actions<br/>daily at 9 am MYT"] -.->|runs pipeline,<br/>commits new data| B
     C -.- F["Vercel<br/>(serverless Python)"]
@@ -59,7 +59,7 @@ flowchart LR
 ```
 
 1. **Data.** [PriceCatcher](https://data.gov.my/data-catalogue/pricecatcher) is open data from KPDN: prices of hundreds of everyday items, checked in person by officers at shops all over Malaysia. It is published as monthly Parquet files.
-2. **Pipeline (Python, pandas).** Downloads the last 6 full months plus the current month, keeps grocery shops in Selangor, KL and Putrajaya, removes obvious data errors, and builds weekly prices, labels, price moves and shop rankings. It also finds each shop's position and neighbourhood name on the map with OpenStreetMap, once per shop. The API only needs 7 small tables (about 0.5 MB), which are copied into `api/data/`.
+2. **Pipeline (Python, pandas).** Downloads the last 6 full months plus the current month, keeps grocery shops in all 16 states and federal territories, removes obvious data errors, and builds weekly prices, labels, price moves and shop rankings. It also finds each shop's position and neighbourhood name on the map with OpenStreetMap, once per shop. The API only needs 7 small tables (a few MB), which are copied into `api/data/`.
 3. **API (FastAPI).** Loads those tables into memory once at start-up and answers every request from memory. Endpoints: `/areas`, `/items/search`, `/items/{code}`, `/items/{code}/prices`, `/categories`, `/browse`, `/shops`, `/shops/{code}/items`, `/stores`, `/movers`, `/deals`, `/basket`. Interactive docs: https://sensen-api.vercel.app/docs
 4. **Web app (React + Vite).** A PWA with a phone layout and a separate laptop layout (a two-column dashboard, not a stretched phone screen). For "near me" it downloads every shop's price and position for one item, then works out distances on the device.
 5. **Automation.** A GitHub Action runs the pipeline every morning, runs the tests, and commits the new data only if it changed. That commit makes Vercel redeploy the API.
@@ -68,7 +68,7 @@ flowchart LR
 
 | Rule | Detail |
 |---|---|
-| Coverage | Selangor, Kuala Lumpur and Putrajaya, grocery shop types only (cooked food is excluded) |
+| Coverage | All of Malaysia (every state and federal territory in PriceCatcher), grocery shop types only (cooked food is excluded). Prices are only compared within a state, so Sabah and Sarawak prices are never measured against the peninsula's |
 | Data errors | A reading more than 3 times away from the item's median is dropped |
 | Weekly price | Median price per shop, then the median across shops. Only complete Monday to Sunday weeks are used |
 | Low / Normal / High | This week vs the item's last 26 weeks: below the 25th percentile is Low, above the 75th is High. Needs at least 8 weeks of history and 3 shops |
@@ -95,7 +95,7 @@ flowchart LR
 
 Some choices I made on purpose:
 
-- **No database.** The data changes once a day and is about 0.5 MB, so the API keeps it in memory. That is faster and simpler than running a database, and it costs nothing.
+- **No database.** The data changes once a day and is only a few MB, so the API keeps it in memory. That is faster and simpler than running a database, and it costs nothing.
 - **No chart or UI libraries.** The price chart is a hand-drawn SVG, and the area picker is a custom component, because a normal dropdown cannot grey out part of an option. This keeps the app small and fast on a phone.
 - **Your location stays on your phone.** The app asks the server for every shop's price for an item and works out the distances itself (the haversine formula), so no one's location is ever sent or stored.
 - **Offline first.** The service worker serves the app shell from the cache, and API answers use "network first, then cache", so prices stay fresh online and still show when offline.
@@ -115,7 +115,7 @@ sensen/
 │   └── data/                7 tables made by the pipeline
 ├── pipeline/
 │   ├── download.py          get PriceCatcher files from data.gov.my
-│   ├── clean.py             filter to Selangor, KL and Putrajaya grocery shops, drop errors
+│   ├── clean.py             filter to grocery shops in Malaysia, drop errors
 │   ├── weekly.py            weekly prices, labels and price moves
 │   ├── geocode.py           shop positions and neighbourhoods from OpenStreetMap
 │   ├── geocache.csv         saved positions, so each shop is looked up only once
@@ -184,7 +184,7 @@ The web app talks to `http://127.0.0.1:8000` by default. To point it somewhere e
 - [ ] v1.0: SenSen assistant, an AI chat that answers from real prices, including recipes ("I want to bake a cake": ingredients, cheapest shops, add all to basket)
 - [ ] v1.1: a SenSen mascot and a first-run tour that highlights each button and tab and explains it
 - [ ] v1.2: smart price alerts that learn your habits ("You usually check ayam on Saturdays: it's Low this week")
-- [ ] Any time: all of Malaysia (every state PriceCatcher covers, about 3,000 grocery shops)
+- [x] All of Malaysia: every state PriceCatcher covers, about 3,000 grocery shops
 
 ---
 
@@ -192,8 +192,8 @@ The web app talks to `http://127.0.0.1:8000` by default. To point it somewhere e
 
 PriceCatcher is the best free source of real shelf prices in Malaysia, but it doesn't cover everything. SenSen says so instead of hiding it (figures checked in October 2026):
 
-- **Not every shop is included.** KPDN checks a sample: 483 grocery shops in Selangor, KL and Putrajaya (Selangor 183, KL 260, Putrajaya 40), with only 6 kedai runcit in all of Selangor. Many supermarkets are missing too: around Mutiara Damansara, for example, neither Lotus's Mutiara Damansara nor 1K Plus Market at The Curve is in the data. So "cheapest near you" means cheapest among the shops PriceCatcher checks.
-- **A fixed list of items.** 606 grocery items are listed, but only about half get prices (302 in Selangor, KL and Putrajaya in one October week), and a typical shop prices about 100. Many packaged goods are missing, and some listed items (packaged bread, for one) have had no prices at all lately. SenSen shows these as "Not priced by PriceCatcher lately".
+- **Not every shop is included.** KPDN checks a sample: 2,992 grocery shops in all of Malaysia, unevenly spread (Sarawak 329, Selangor only 183, Melaka 60), with only 6 kedai runcit in all of Selangor. Many supermarkets are missing too: around Mutiara Damansara, for example, neither Lotus's Mutiara Damansara nor 1K Plus Market at The Curve is in the data. So "cheapest near you" means cheapest among the shops PriceCatcher checks.
+- **A fixed list of items.** 606 grocery items are listed, but only about half get prices (304 nationwide in one October week), and a typical shop prices about 75 to 100. Many packaged goods are missing, and some listed items (packaged bread, for one) have had no prices at all lately. SenSen shows these as "Not priced by PriceCatcher lately".
 - **Specific products and sizes.** Each item is one product in one size; other brands and sizes on the same shelf are not covered.
 - **Not every shop prices every item, every week**, and prices reach the open data about two weeks after they are checked. SenSen only uses prices from the last 14 days of the data and shows the date of each.
 - **Promotions and member prices may be missed.**

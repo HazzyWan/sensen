@@ -29,10 +29,16 @@ def test_health():
     assert client.get("/health").json() == {"status": "ok"}
 
 
+ALL_REGIONS = {"Johor", "Kedah", "Kelantan", "Kuala Lumpur", "Labuan", "Melaka", "Negeri Sembilan", "Pahang",
+               "Perak", "Perlis", "Pulau Pinang", "Putrajaya", "Sabah", "Sarawak", "Selangor", "Terengganu"}
+
+
 def test_meta_has_the_regions_we_cover():
     meta = client.get("/meta").json()
-    # Putrajaya is small: it may have no fresh prices in some weeks.
-    assert {"Kuala Lumpur", "Selangor"} <= set(meta["regions"]) <= {"Kuala Lumpur", "Putrajaya", "Selangor"}
+    # Small regions (Labuan, Putrajaya) may have no fresh prices in some weeks.
+    regions = set(meta["regions"])
+    assert {"Kuala Lumpur", "Selangor", "Johor", "Sarawak"} <= regions  # the big ones always have prices
+    assert regions <= ALL_REGIONS
     assert meta["weeks"] >= 8
 
 
@@ -204,14 +210,14 @@ def test_browse_unknown_category_is_404(district):
 
 # ---------- prices with map positions (for "near me") ----------
 
-def test_item_prices_cheapest_first_with_positions_in_selangor_kl():
+def test_item_prices_cheapest_first_with_positions_in_malaysia():
     rows = client.get("/items/1/prices").json()
     assert rows, "item 1 should have fresh prices somewhere"
     prices = [r["price"] for r in rows]
     assert prices == sorted(prices)
     for r in rows:
         if r["lat"] is not None:
-            assert 2.5 < r["lat"] < 3.9 and 100.7 < r["lon"] < 102.1
+            assert 0.8 < r["lat"] < 7.5 and 99.5 < r["lon"] < 119.4
 
 
 def test_item_prices_unknown_item_is_404():
@@ -227,15 +233,21 @@ def test_areas_have_town_hints():
     assert all(a["district"].lower() not in [t.lower() for t in a["towns"]] for a in areas)
 
 
-def test_areas_places_include_hints_and_points_are_in_selangor_kl():
+def test_areas_places_include_hints_and_points_are_in_malaysia():
     areas = client.get("/areas").json()
     for a in areas:
         # Every hint shown is also searchable.
         assert set(a["towns"]) <= set(a["places"])
         for lat, lon in a["points"]:
-            assert 2.5 < lat < 3.9 and 100.7 < lon < 102.1
+            assert 0.8 < lat < 7.5 and 99.5 < lon < 119.4
     # Most areas have shops on the map, so "use my location" can pick one.
     assert sum(bool(a["points"]) for a in areas) >= len(areas) * 0.8
+
+
+def test_district_names_are_unique_across_regions():
+    # "Rompin" is in two states; the pipeline adds the state to tell them apart.
+    names = [a["district"] for a in client.get("/areas").json()]
+    assert len(names) == len(set(names))
 
 
 # ---------- movers and deals ----------

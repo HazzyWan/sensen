@@ -11,8 +11,9 @@ Nominatim's rules (https://operations.osmfoundation.org/policies/nominatim/):
   - send a User-Agent that says who we are
 It also looks up each shop's neighbourhood name ("Kota Damansara") from its
 position, once, for the area picker.
-So the first run takes a while (roughly 15 to 40 minutes). It saves after every
-shop, so you can stop it with Ctrl+C and run it again to continue.
+So the first run takes a while: about 15 to 40 minutes for a few hundred shops,
+a few hours for all of Malaysia. It saves after every shop, so you can stop it
+with Ctrl+C and run it again to continue.
 
 Run from the repo root (after clean.py):
     python pipeline/geocode.py
@@ -55,16 +56,40 @@ MAX_REQUESTS = 60 if IN_CI else None
 # shop's name found at another branch of the same chain.
 OUTLIER_MIN_KM = 8
 
-# Anything outside this box is a wrong match (another "Taman Melawati" elsewhere).
-LAT_RANGE = (2.55, 3.85)   # Selangor + KL, with a little room
-LON_RANGE = (100.75, 102.05)
+# A result outside the shop's own state is a wrong match (another "Taman
+# Melawati" in a different state). Rough boxes (south, north, west, east) with
+# a little room; the district check below catches smaller mistakes.
+STATE_BOX = {
+    "Perlis": (6.2, 6.8, 100.05, 100.45),
+    "Kedah": (5.0, 6.8, 99.55, 101.2),          # includes Langkawi
+    "Pulau Pinang": (5.05, 5.65, 100.1, 100.65),
+    "Perak": (3.55, 6.0, 100.25, 101.85),
+    "Selangor": (2.55, 3.85, 100.75, 102.05),
+    "Kuala Lumpur": (2.95, 3.3, 101.55, 101.8),
+    "Putrajaya": (2.85, 3.0, 101.6, 101.76),
+    "Negeri Sembilan": (2.35, 3.3, 101.55, 102.75),
+    "Melaka": (1.95, 2.6, 101.95, 102.6),
+    "Johor": (1.15, 2.95, 102.35, 104.65),
+    "Pahang": (2.35, 4.85, 101.25, 103.75),
+    "Terengganu": (3.85, 5.95, 102.25, 103.75),
+    "Kelantan": (4.45, 6.3, 101.25, 102.7),
+    "Sabah": (3.95, 7.45, 115.25, 119.35),
+    "Sarawak": (0.8, 5.05, 109.5, 115.75),
+    "Labuan": (5.15, 5.45, 115.1, 115.4),
+}
+MALAYSIA_BOX = (0.8, 7.45, 99.55, 119.35)  # for a state not in the list above
 
 # Parts of an address, split at commas, sorted into kinds.
 UNIT = re.compile(r"^(LOT|NO\.?|UNIT|BLOK|BLOCK|PT|PLOT)\b|^(?=.*\d)[\d\-/A-Z&.]{1,10}$")
 FLOOR = re.compile(r"\b(FLOOR|FLR|GROUND|BASEMENT|MEZZANINE|ARAS|TINGKAT|UG|LG|GF)\b")
 COMPANY = re.compile(r"\b(SDN\.?\s*BHD|BERHAD|ENTERPRISE|TRADING)\b")
 POSTCODE_PART = re.compile(r"^(\d{5})\s*(.*)$")          # "40000 SHAH ALAM"
-STATE_PART = re.compile(r"^(SELANGOR|W\.?\s*P\.?|WILAYAH|KUALA LUMPUR$)")
+# A part that is only the state ("SELANGOR", "JOHOR DARUL TAKZIM", "W.P. LABUAN"):
+# the search adds the state itself, so the part is dropped.
+STATE_PART = re.compile(
+    r"^(W\.?\s*P\.?|WILAYAH)|^(SELANGOR|JOHOR|KEDAH|KELANTAN|MELAKA|MALACCA|NEGERI SEMBILAN|N\.?\s*SEMBILAN"
+    r"|PAHANG|PERAK|PERLIS|PULAU PINANG|P\.?\s*PINANG|PENANG|SABAH|SARAWAK|TERENGGANU|KUALA LUMPUR|LABUAN"
+    r"|PUTRAJAYA)(\s+DARUL\s+\w+)?$")
 LANDMARK = re.compile(r"PLAZA|MALL|KOMPLEKS|COMPLEX|CENTRE|CENTER|SQUARE|@|MEDAN|PASAR|ARCADE|AVENUE|GALERIA|PARADE")
 STREET = re.compile(r"^(OFF\s+)?(JALAN|JLN|PERSIARAN|LEBUH|LEBUHRAYA|LORONG|LRG)\b")
 AREA = re.compile(r"^(TAMAN|TMN|BANDAR|PUSAT BANDAR|SEKSYEN|DESA|KAMPUNG|KG|SAUJANA)\b")
@@ -117,13 +142,14 @@ def request(url, params):
     return resp.json()
 
 
-def ask(params):
-    """One search. Returns (lat, lon) inside Selangor/KL, or None."""
+def ask(params, box=MALAYSIA_BOX):
+    """One search. Returns (lat, lon) inside the box (the shop's state), or None."""
     hits = request(URL, {**params, "countrycodes": "my", "limit": 1})
     if not hits:
         return None
     lat, lon = float(hits[0]["lat"]), float(hits[0]["lon"])
-    if LAT_RANGE[0] <= lat <= LAT_RANGE[1] and LON_RANGE[0] <= lon <= LON_RANGE[1]:
+    south, north, west, east = box
+    if south <= lat <= north and west <= lon <= east:
         return lat, lon
     return None
 
@@ -165,7 +191,8 @@ def locate(shop, bounds=None):
     a = split_address(address)
     # Where the shop is, for adding to short searches. Many KL addresses have
     # no postcode or town at all, so the district from PriceCatcher fills in.
-    place = a["town"] or shop.district
+    district = re.sub(r"\s*\(.*\)$", "", shop.district)  # "Rompin (Pahang)" -> "Rompin"
+    place = a["town"] or district
     where = f"{place}, {shop.region}, Malaysia"
 
     tries = [
@@ -181,7 +208,7 @@ def locate(shop, bounds=None):
     tries += [("postcode", {"q": f"{ar}, {where}"}) for ar in a["area"][:1]]
     if a["town"]:
         tries.append(("town", {"q": f"{a['town']}, {shop.region}, Malaysia"}))
-    tries.append(("town", {"q": f"{shop.district}, {shop.region}, Malaysia"}))
+    tries.append(("town", {"q": f"{district}, {shop.region}, Malaysia"}))
 
     seen = set()
     for precision, params in tries:
@@ -189,7 +216,7 @@ def locate(shop, bounds=None):
         if key in seen or not any(params.values()):
             continue  # skip a query identical to one already tried
         seen.add(key)
-        spot = ask({**params, **(bounds or {})})
+        spot = ask({**params, **(bounds or {})}, STATE_BOX.get(shop.region, MALAYSIA_BOX))
         if spot:
             return {"lat": spot[0], "lon": spot[1], "precision": precision,
                     "query": next(iter(params.values())), "strategy": STRATEGY}

@@ -3,7 +3,6 @@ import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 import { VitePWA } from 'vite-plugin-pwa'
 
-// https://vite.dev/config/
 // Version info shown in the footer. Anything in process.env that starts with
 // VITE_ ends up in import.meta.env inside the app, so setting them here is enough.
 // The version comes from package.json; the build id is the git commit Vercel
@@ -12,6 +11,7 @@ const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 
 process.env.VITE_APP_VERSION = pkg.version
 process.env.VITE_APP_BUILD = (process.env.VERCEL_GIT_COMMIT_SHA ?? 'local').slice(0, 7)
 
+// https://vite.dev/config/
 export default defineConfig({
   plugins: [
     react(),
@@ -21,9 +21,9 @@ export default defineConfig({
       registerType: 'autoUpdate', // a new version replaces the old one on next visit
       includeAssets: ['icon.svg', 'apple-touch-icon.png'],
       manifest: {
-        name: 'SenSen: Grocery prices near you',
+        name: 'SenSen: grocery prices near you',
         short_name: 'SenSen',
-        description: 'Compare grocery prices across shops in Selangor and Kuala Lumpur.',
+        description: 'Compare grocery prices across shops in Malaysia.',
         lang: 'en',
         start_url: '/',
         display: 'standalone',

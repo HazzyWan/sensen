@@ -1,4 +1,4 @@
-"""Turn the raw PriceCatcher files into one clean table for Selangor and KL.
+"""Turn the raw PriceCatcher files into one clean table for all of Malaysia.
 
 Reads data/raw/, writes data/clean/prices.parquet with one row per price
 reading, already joined to its item and shop details.
@@ -15,9 +15,16 @@ RAW_DIR = Path("data/raw")
 CLEAN_DIR = Path("data/clean")
 
 # Exact spellings from the data (checked with explore.py).
-# PriceCatcher's state name -> the region name the app shows. Matched ignoring
-# dots, spaces and case, so "W.P. Putrajaya" and "WP Putrajaya" both work.
-STATES = {"Selangor": "Selangor", "W.P. Kuala Lumpur": "Kuala Lumpur", "W.P. Putrajaya": "Putrajaya"}
+# PriceCatcher's state name -> the region name the app shows: every state and
+# federal territory in Malaysia. Matched ignoring dots, spaces and case, so
+# "W.P. Putrajaya" and "WP Putrajaya" both work.
+STATES = {
+    "Johor": "Johor", "Kedah": "Kedah", "Kelantan": "Kelantan", "Melaka": "Melaka",
+    "Negeri Sembilan": "Negeri Sembilan", "Pahang": "Pahang", "Perak": "Perak", "Perlis": "Perlis",
+    "Pulau Pinang": "Pulau Pinang", "Sabah": "Sabah", "Sarawak": "Sarawak", "Selangor": "Selangor",
+    "Terengganu": "Terengganu", "W.P. Kuala Lumpur": "Kuala Lumpur", "W.P. Labuan": "Labuan",
+    "W.P. Putrajaya": "Putrajaya",
+}
 
 # Shops that sell groceries. Restaurants, food courts and medan selera are left out.
 GROCERY_TYPES = [
@@ -65,6 +72,11 @@ def load_premises():
     # Store one consistent spelling of each premise type.
     canonical = dict(zip(match_key(pd.Series(GROCERY_TYPES)), GROCERY_TYPES))
     p["premise_type"] = match_key(p["premise_type"]).map(canonical)
+
+    # The app picks areas by district name, so a name used in two states
+    # ("Rompin" is in Pahang and Negeri Sembilan) gets its state added.
+    states_per = p.groupby("district")["region"].transform("nunique")
+    p.loc[states_per > 1, "district"] = p["district"] + " (" + p["region"] + ")"
     return p
 
 
@@ -85,7 +97,7 @@ def load_prices(premise_codes):
         # Only read rows for our shops, instead of all 1.8M rows per month.
         df = pd.read_parquet(f, filters=[("premise_code", "in", list(premise_codes))])
         parts.append(df)
-        print(f"  {f.stem}: {len(df):>8,} rows for Selangor + KL")
+        print(f"  {f.stem}: {len(df):>8,} rows for Malaysia")
     prices = pd.concat(parts, ignore_index=True)
     prices["date"] = pd.to_datetime(prices["date"])
     return prices

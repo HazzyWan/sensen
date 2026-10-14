@@ -162,8 +162,13 @@ GEOCACHE = Path("pipeline/geocache.csv")
 # Malaysian addresses end with "<postcode> <TOWN>, <STATE>". We read the town
 # after the 5-digit postcode, e.g. "... 40150 SHAH ALAM, SELANGOR" -> "Shah Alam".
 POSTCODE_TOWN = re.compile(r"\b\d{5}\s*,?\s*([A-Z][A-Z .'/-]*?)\s*(?:,|$)")
-STATE_WORDS = re.compile(r"\s+(SELANGOR|W\.?P\.?\s*KUALA LUMPUR|WILAYAH PERSEKUTUAN.*)$")
-NOT_A_HINT = {"KUALA LUMPUR", "SELANGOR", "WILAYAH PERSEKUTUAN KUALA LUMPUR"}  # says nothing new about where in the area
+STATE_NAMES = ["SELANGOR", "JOHOR", "KEDAH", "KELANTAN", "MELAKA", "NEGERI SEMBILAN", "PAHANG", "PERAK",
+               "PERLIS", "PULAU PINANG", "PENANG", "SABAH", "SARAWAK", "TERENGGANU", "KUALA LUMPUR",
+               "LABUAN", "PUTRAJAYA"]
+STATE_WORDS = re.compile(r"\s*((" + "|".join(STATE_NAMES) + r")(\s+DARUL\s+\w+)?|W\.?P\.?\s*\w[\w ]*|WILAYAH PERSEKUTUAN.*)$")
+# "\s*": some addresses lose the space ("BAYAN BARUPULAU PINANG").
+# Names that say nothing new about where in the area someone is.
+NOT_A_HINT = set(STATE_NAMES) | {"WILAYAH PERSEKUTUAN KUALA LUMPUR", "MALAYSIA"}
 TOWNS_PER_AREA = 6  # the picker shows 3 and searches all 6
 
 
@@ -173,15 +178,15 @@ def town_of(address):
         return None
     raw = m.group(1).strip(" .")
     town = STATE_WORDS.sub("", raw).strip(" .")
-    # "KUALA SELANGOR" is a town, not "KUALA" + the state name.
-    if town == "KUALA":
+    # "KUALA SELANGOR" and "KUALA TERENGGANU" are towns, not "KUALA" + the state name.
+    if town in {"KUALA", "KOTA", "BANDAR", "PULAU"}:
         town = raw
     return None if not town or town in NOT_A_HINT else town.title()
 
 
 def same_town(name):
-    """Treat spelling variants as one town: 'Kuala Kubu Baru' = 'Kuala Kubu Bharu'."""
-    return name.upper().replace("BHARU", "BARU").replace("TANJUNG", "TANJONG")
+    """Treat spelling variants as one town: 'Kuala Kubu Baru' = 'Kuala Kubu Bharu', 'Johor Bahru' = 'Johor Bharu'."""
+    return name.upper().replace("BHARU", "BARU").replace("BAHRU", "BARU").replace("TANJUNG", "TANJONG")
 
 
 def neighbourhoods(addresses, district, limit=4):
@@ -314,7 +319,7 @@ def main():
     areas.to_parquet(SERVE_DIR / "areas.parquet", index=False)
 
     priced = items["item_code"].isin(latest["item_code"]).sum()
-    print(f"Items: {len(items)} tracked, {priced} with a fresh price somewhere in Selangor or KL")
+    print(f"Items: {len(items)} tracked, {priced} with a fresh price somewhere in Malaysia")
     print(f"Data runs to {last_date.date()}; fresh = on or after "
           f"{(last_date - pd.Timedelta(days=FRESH_DAYS - 1)).date()}")
     print(f"Fresh shop prices: {len(latest):,} "

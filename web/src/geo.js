@@ -27,7 +27,7 @@ export function mapsLink(shop) {
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`
 }
 
-// Farther than this from every shop we know, the user is outside Selangor and KL.
+// Farther than this from every shop we know, the user is outside the areas we cover.
 const OUTSIDE_KM = 25
 
 // The area the user is in, from the 5 shops nearest to them: each shop votes

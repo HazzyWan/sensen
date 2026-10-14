@@ -8,7 +8,7 @@ const HINT_TOWNS = 3 // neighbourhoods shown in grey; search looks through all o
 // its neighbourhoods in grey, people can type theirs ("Ampang") to find the
 // area, and "Use my location" can pick the nearest area for them.
 // auto: the area follows the user's location. outside: location is on, but
-// the user is too far from every shop we know (outside Selangor and KL).
+// the user is too far from every shop we know (outside Malaysia).
 export function AreaPicker({ areas, value, onChange, auto, onAuto, outside }) {
   const { t } = useLang()
   const near = useNearMe()
@@ -48,7 +48,9 @@ export function AreaPicker({ areas, value, onChange, auto, onAuto, outside }) {
   const term = q.trim().toLowerCase()
   const has = (name) => name.toLowerCase().includes(term)
   const matches = areas.filter((a) => !term || has(a.district) || a.places.some(has))
+  // States in A to Z order, with the user's own state first.
   const regions = [...new Set(matches.map((a) => a.region))]
+    .sort((x, y) => (x === current?.region ? -1 : y === current?.region ? 1 : x.localeCompare(y)))
   // While searching "Ampang", show "Ampang" under Hulu Langat, so it is clear why it matched.
   const hint = (a) => (!term || has(a.district) ? a.towns : a.places.filter(has)).slice(0, HINT_TOWNS).join(', ')
 

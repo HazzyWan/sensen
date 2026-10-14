@@ -24,7 +24,7 @@ DATA_DIR = Path(__file__).parent / "data"
 app = FastAPI(
     title="SenSen API",
     version="0.3.0",
-    description="Grocery prices for Selangor and Kuala Lumpur, from PriceCatcher (KPDN, DOSM, CC BY 4.0).",
+    description="Grocery prices across Malaysia, from PriceCatcher (KPDN, DOSM, CC BY 4.0).",
 )
 
 # The app runs on a different address (port 5173) from the API (port 8000), so the
@@ -66,7 +66,7 @@ DISTRICT_REGION = (latest[["district", "region"]].drop_duplicates()
                    .set_index("district")["region"].to_dict())
 
 # (area_type, area, item_code) -> label row, for fast lookups. area_type is part
-# of the key because "Kuala Lumpur" is both a district and a region.
+# of the key because a name can be both a district and a region ("Putrajaya").
 LABEL_BY_AREA = {(r.area_type, r.area, r.item_code): r for r in labels.itertuples()}
 
 HISTORY_MIN_WEEKS = 8  # fewer district weeks than this -> chart uses the region
@@ -118,7 +118,7 @@ class SearchResult(BaseModel):
     cheapest_chain: str | None
     price_date: date | None
     shops_with_price: int
-    priced_anywhere: bool = Field(description="False if no shop in Selangor or KL has a fresh price")
+    priced_anywhere: bool = Field(description="False if no shop in Malaysia has a fresh price")
     label: Label | None
     label_scope: Literal["district", "region"] | None
 
@@ -188,7 +188,7 @@ class ItemDetail(BaseModel):
     district: str
     region: str
     shops_with_price: int
-    priced_anywhere: bool = Field(description="False if no shop in Selangor or KL has a fresh price")
+    priced_anywhere: bool = Field(description="False if no shop in Malaysia has a fresh price")
     district_median: float | None
     label: LabelInfo | None
     cheapest_shops: list[ShopPrice]
@@ -480,7 +480,7 @@ def browse(
 
 @app.get("/items/{item_code}/prices", response_model=list[ShopLocated])
 def item_prices(item_code: int):
-    """Every fresh price for one item across Selangor and KL, cheapest first,
+    """Every fresh price for one item across Malaysia, cheapest first,
     with each shop's map position.
 
     The app works out which shops are near the user on the phone itself, so

@@ -7,7 +7,7 @@ to data/clean/:
   movers.parquet   week-on-week change for the latest week
 
 An "area" is either a district (e.g. Petaling) or a whole region
-(Selangor, Kuala Lumpur). Region rows help when a district has too few
+(a state, e.g. Selangor or Johor). Region rows help when a district has too few
 shops for an item.
 
 Run from the repo root (after clean.py):
