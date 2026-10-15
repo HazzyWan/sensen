@@ -186,7 +186,11 @@ def town_of(address):
 
 def same_town(name):
     """Treat spelling variants as one town: 'Kuala Kubu Baru' = 'Kuala Kubu Bharu', 'Johor Bahru' = 'Johor Bharu'."""
-    return name.upper().replace("BHARU", "BARU").replace("BAHRU", "BARU").replace("TANJUNG", "TANJONG")
+    return (name.upper().replace("BHARU", "BARU").replace("BAHRU", "BARU")
+            .replace("TANJUNG", "TANJONG").replace("ALOR STAR", "ALOR SETAR"))
+
+
+GENERIC_WORDS = {"KAMPUNG", "KG", "TAMAN", "TMN", "BANDAR", "SEKSYEN", "DESA", "PUSAT BANDAR"}
 
 
 def neighbourhoods(addresses, district, limit=4):
@@ -199,6 +203,10 @@ def neighbourhoods(addresses, district, limit=4):
     counts = Counter()
     for address in addresses.dropna():
         for hood in split_address(address)["area"][:1]:
+            hood = re.sub(r"\s*\d{5}.*$", "", hood).strip()  # "KAMPUNG APEK 22100 PERMAISURI"
+            # Skip numbered sections ("Seksyen 17") and a bare "Kampung" or "Taman".
+            if NOT_A_SUBURB.search(hood) or hood in GENERIC_WORDS:
+                continue
             if same_town(hood) != same_town(district):
                 counts[hood.title()] += 1
     return [name for name, _ in counts.most_common(limit)]
@@ -217,7 +225,7 @@ def ranked(names, district):
         if not isinstance(name, str) or not name.strip() or name.strip() == "-":
             continue
         name = CITY_PREFIX.sub("", name.strip())
-        if NOT_A_SUBURB.search(name):
+        if NOT_A_SUBURB.search(name) or name.upper() in GENERIC_WORDS:
             continue
         key = same_town(name)
         if key == same_town(district) or key in NOT_A_HINT:

@@ -78,6 +78,7 @@ STATE_BOX = {
     "Labuan": (5.15, 5.45, 115.1, 115.4),
 }
 MALAYSIA_BOX = (0.8, 7.45, 99.55, 119.35)  # for a state not in the list above
+MAX_QUERY = 200  # characters; longer searches are cut at a comma
 
 # Parts of an address, split at commas, sorted into kinds.
 UNIT = re.compile(r"^(LOT|NO\.?|UNIT|BLOK|BLOCK|PT|PLOT)\b|^(?=.*\d)[\d\-/A-Z&.]{1,10}$")
@@ -138,12 +139,21 @@ def request(url, params):
     requests_made += 1
     time.sleep(PAUSE)
     resp = requests.get(url, params={**params, "format": "jsonv2"}, headers=HEADERS, timeout=30)
+    if resp.status_code == 400:
+        # Nominatim refused this one query (e.g. an address far too long to
+        # search). That means "not found", not "the service is down": carry on.
+        return None
     resp.raise_for_status()
     return resp.json()
 
 
 def ask(params, box=MALAYSIA_BOX):
     """One search. Returns (lat, lon) inside the box (the shop's state), or None."""
+    q = params.get("q")
+    if q and len(q) > MAX_QUERY:
+        # Very long addresses (several lot numbers, floors and blocks) fail the
+        # search. Keep the part before the last comma that fits.
+        params = {**params, "q": q[:MAX_QUERY].rsplit(",", 1)[0]}
     hits = request(URL, {**params, "countrycodes": "my", "limit": 1})
     if not hits:
         return None

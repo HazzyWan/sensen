@@ -73,6 +73,9 @@ def load_premises():
     canonical = dict(zip(match_key(pd.Series(GROCERY_TYPES)), GROCERY_TYPES))
     p["premise_type"] = match_key(p["premise_type"]).map(canonical)
 
+    # "WP PUTRAJAYA" and "W.P LABUAN" as district names: the territory's name is enough.
+    p["district"] = p["district"].str.replace(r"^W\.?\s*P\.?\s+", "", regex=True, case=False)
+
     # The app picks areas by district name, so a name used in two states
     # ("Rompin" is in Pahang and Negeri Sembilan) gets its state added.
     states_per = p.groupby("district")["region"].transform("nunique")
