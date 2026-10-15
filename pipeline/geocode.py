@@ -165,10 +165,12 @@ def ask(params, box=MALAYSIA_BOX):
 
 
 # Names people don't use for where they live: numbered sections ("Seksyen 7",
-# "Presint 9", "Zon Perindustrian Seksyen 51") and industrial zones. These
+# "Presint 9", "Zon Perindustrian Seksyen 51"), industrial zones, council and
+# staff-housing names ("Majlis Bandaraya Ipoh", "Kuarters ..."), longhouses ("RH. Maxwell"). These
 # fall through to the next, bigger name ("Shah Alam", "Petaling Jaya").
 NOT_A_SUBURB = re.compile(
-    r"\b(SEKSYEN|SECTION|PRESINT|PRECINCT)\s*\d|PERINDUSTRIAN|INDUSTRIAL|^JALAN\b|^\d",
+    r"\b(SEKSYEN|SECTION|PRESINT|PRECINCT)\s*\d|PERINDUSTRIAN|INDUSTRIAL|^JALAN\b|^\d"
+    r"|^(MAJLIS|KUARTERS|KEDIAMAN|PASUKAN)\b|QUARTERS|BALAI POLIS|^RH\.?\s",  # councils, staff housing, longhouse numbers
     re.IGNORECASE)
 
 
