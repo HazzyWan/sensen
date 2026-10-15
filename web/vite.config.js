@@ -38,12 +38,16 @@ export default defineConfig({
       workbox: {
         // The app's own files (HTML, JS, CSS, icons) are saved at install time.
         globPatterns: ['**/*.{js,css,html,svg,png}'],
+        // The camera-scan test page (v0.8 research) is not part of the app:
+        // don't save it offline, and don't let the app take over its address.
+        globIgnores: ['scan-test/**'],
+        navigateFallbackDenylist: [/^\/scan-test\//],
         runtimeCaching: [
           {
             // API answers: try the network first so prices are fresh; if the
             // phone is offline (or slow for 4 s), use the last saved answer.
             urlPattern: ({ url, request }) =>
-              request.method === 'GET' && /^\/(meta|areas|items|stores|movers|deals)\b/.test(url.pathname),
+              request.method === 'GET' && /^\/(meta|areas|items|stores|movers|deals|categories|browse|shops)\b/.test(url.pathname),
             handler: 'NetworkFirst',
             options: {
               cacheName: 'sensen-api',

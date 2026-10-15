@@ -1,0 +1,373 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>SenSen scan test</title>
+<meta name="robots" content="noindex" />
+<!--
+  v0.8 research page, not part of the app. It tests three free ways to turn a
+  photo into a PriceCatcher item, all running in the browser:
+    1. Image model (CLIP): compares the photo with the names of every priced item.
+    2. Barcode: reads it, looks the product up in Open Food Facts, matches the name.
+    3. Text (OCR): reads a shelf tag and looks for item words and prices.
+  Nothing is uploaded anywhere except the barcode number (to Open Food Facts).
+-->
+<style>
+  :root { --bg: #f4f6f9; --card: #fff; --ink: #191b22; --muted: #6b6e78; --line: #e4e7ec; --brand: #ff5b22;
+          --save: #0f9a68; --dear: #d6453b; --soft: #f4f6f9; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #0d0f13; --card: #1b1e25; --ink: #eef0f5; --muted: #9a9ea9; --line: #2a2e37; --soft: #23262e; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 system-ui, sans-serif; }
+  main { max-width: 860px; margin: 0 auto; padding: 16px; display: grid; gap: 14px; }
+  h1 { margin: 4px 0 0; font-size: 22px; } h1 span { color: var(--brand); }
+  h2 { margin: 0 0 6px; font-size: 16px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 14px; }
+  .muted { color: var(--muted); } .small { font-size: 13px; }
+  button, .filebtn { font: inherit; font-weight: 700; border: 0; border-radius: 12px; padding: 10px 14px; cursor: pointer;
+    background: var(--brand); color: #fff; display: inline-block; }
+  button.ghost { background: var(--soft); color: var(--ink); border: 1px solid var(--line); }
+  button:disabled { opacity: .5; cursor: default; }
+  input[type=file] { display: none; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .bar { height: 8px; background: var(--soft); border-radius: 99px; overflow: hidden; flex: 1; min-width: 120px; }
+  .bar div { height: 100%; width: 0; background: var(--brand); transition: width .2s; }
+  .photo { display: grid; grid-template-columns: 120px 1fr; gap: 12px; }
+  .photo img { width: 120px; height: 120px; object-fit: cover; border-radius: 12px; background: var(--soft); }
+  ol { margin: 4px 0; padding-left: 20px; } li { margin: 1px 0; }
+  .pct { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .sec { margin-top: 6px; }
+  .tag { font-size: 12px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+  select { font: inherit; padding: 6px 8px; border-radius: 10px; border: 1px solid var(--line); background: var(--soft); color: var(--ink); }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  td, th { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+  .ok { color: var(--save); font-weight: 700; } .bad { color: var(--dear); font-weight: 700; }
+  textarea { width: 100%; min-height: 120px; font: 12px/1.4 ui-monospace, monospace; background: var(--soft); color: var(--ink);
+    border: 1px solid var(--line); border-radius: 12px; padding: 8px; }
+  @media (max-width: 520px) { .photo { grid-template-columns: 1fr; } .photo img { width: 100%; height: 200px; } }
+</style>
+<script src="items.js"></script>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Sen<span>Sen</span> scan test (v0.8 research)</h1>
+    <p class="muted small">Tests whether a photo can be matched to a PriceCatcher item, for free, in the browser.
+      Photos stay on this device; only barcode numbers are sent, to Open Food Facts.</p>
+  </header>
+
+  <section class="card">
+    <h2>1. Load the image model</h2>
+    <p class="muted small">About 90 MB the first time (saved by the browser afterwards). Use Wi-Fi.</p>
+    <div class="row">
+      <button id="load">Load model</button>
+      <div class="bar"><div id="loadbar"></div></div>
+      <span id="loadmsg" class="small muted"></span>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>2. Add photos</h2>
+    <p class="muted small">Fresh items (chicken, tomatoes, kangkung...) and packaged items with the barcode visible.
+      Odd angles and bad light are welcome: that is what real users will do.</p>
+    <div class="row">
+      <label class="filebtn" id="pickbtn">Choose photos<input id="files" type="file" accept="image/*" multiple /></label>
+      <label class="filebtn" style="background:#1d2340">Take a photo<input id="camera" type="file" accept="image/*" capture="environment" /></label>
+      <span class="small muted" id="itemcount"></span>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>3. Mark each result, then copy the summary</h2>
+    <div id="summary" class="small muted">No photos yet.</div>
+    <div class="row sec"><button class="ghost" id="copy">Copy results for Claude</button><span id="copied" class="small muted"></span></div>
+    <textarea id="out" readonly placeholder="Results appear here." hidden></textarea>
+  </section>
+
+  <div id="photos" style="display:grid;gap:14px"></div>
+</main>
+
+<script type="module">
+import {
+  AutoTokenizer, CLIPTextModelWithProjection, AutoProcessor, CLIPVisionModelWithProjection, RawImage,
+} from 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.7.0'
+
+const MODEL = 'Xenova/clip-vit-base-patch32'
+const ITEMS = window.SCAN_ITEMS || []
+const $ = (id) => document.getElementById(id)
+$('itemcount').textContent = `${ITEMS.length} priced items to match against`
+
+const state = { tok: null, textModel: null, proc: null, visionModel: null, textEmb: null, loadMs: null, photos: [] }
+
+// ---------- 1. Image model: embed every item name once ----------
+function normalize(vec) {
+  let n = 0; for (const v of vec) n += v * v
+  n = Math.sqrt(n) || 1
+  return vec.map((v) => v / n)
+}
+
+$('load').onclick = async () => {
+  $('load').disabled = true
+  const t0 = performance.now()
+  const files = {}
+  const progress = (p) => {
+    if (p.status === 'progress' && p.total) files[p.file] = [p.loaded, p.total]
+    const sum = Object.values(files).reduce((a, [l, t]) => [a[0] + l, a[1] + t], [0, 0])
+    if (sum[1]) {
+      $('loadbar').style.width = `${(sum[0] / sum[1]) * 100}%`
+      $('loadmsg').textContent = `${(sum[0] / 1e6).toFixed(0)} / ${(sum[1] / 1e6).toFixed(0)} MB`
+    }
+  }
+  try {
+    state.tok = await AutoTokenizer.from_pretrained(MODEL)
+    state.textModel = await CLIPTextModelWithProjection.from_pretrained(MODEL, { dtype: 'q8', progress_callback: progress })
+    state.proc = await AutoProcessor.from_pretrained(MODEL)
+    state.visionModel = await CLIPVisionModelWithProjection.from_pretrained(MODEL, { dtype: 'q8', progress_callback: progress })
+    $('loadmsg').textContent = 'Reading item names...'
+    const prompts = ITEMS.map((it) => `a photo of ${it.label}`)
+    const emb = []
+    for (let i = 0; i < prompts.length; i += 32) {
+      const inputs = state.tok(prompts.slice(i, i + 32), { padding: true, truncation: true })
+      const { text_embeds } = await state.textModel(inputs)
+      const [b, d] = text_embeds.dims
+      for (let r = 0; r < b; r++) emb.push(normalize(Array.from(text_embeds.data.slice(r * d, (r + 1) * d))))
+    }
+    state.textEmb = emb
+    state.loadMs = Math.round(performance.now() - t0)
+    $('loadbar').style.width = '100%'
+    $('loadmsg').textContent = `Ready in ${(state.loadMs / 1000).toFixed(1)} s`
+    for (const p of state.photos) if (!p.image) runImage(p)
+  } catch (e) {
+    $('loadmsg').textContent = `Could not load: ${e.message}`
+    $('load').disabled = false
+  }
+}
+
+async function classify(file) {
+  const t0 = performance.now()
+  const image = await RawImage.fromBlob(file)
+  const inputs = await state.proc(image)
+  const { image_embeds } = await state.visionModel(inputs)
+  const img = normalize(Array.from(image_embeds.data))
+  // CLIP scores: cosine similarity x 100, turned into percentages (softmax).
+  const logits = state.textEmb.map((t) => 100 * t.reduce((s, v, k) => s + v * img[k], 0))
+  const max = Math.max(...logits)
+  const exps = logits.map((l) => Math.exp(l - max))
+  const total = exps.reduce((a, b) => a + b, 0)
+  const ranked = ITEMS.map((it, k) => ({ it, p: exps[k] / total })).sort((a, b) => b.p - a.p)
+  // Same scores added up per category ("is it at least the right kind of food?").
+  const cats = {}
+  for (const { it, p } of ranked) cats[it.category] = (cats[it.category] || 0) + p
+  const topCats = Object.entries(cats).sort((a, b) => b[1] - a[1]).slice(0, 3)
+  return { top: ranked.slice(0, 5), cats: topCats, ms: Math.round(performance.now() - t0) }
+}
+
+// ---------- 2. Barcode -> Open Food Facts -> PriceCatcher item ----------
+let zxingLoading = null
+function loadZXing() {
+  zxingLoading ??= new Promise((ok, fail) => {
+    const s = document.createElement('script')
+    s.src = 'https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js'
+    s.onload = () => ok(window.ZXing); s.onerror = fail
+    document.head.appendChild(s)
+  })
+  return zxingLoading
+}
+
+async function readBarcode(file, url) {
+  if ('BarcodeDetector' in window) {
+    try {
+      const det = new window.BarcodeDetector({ formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e'] })
+      const found = await det.detect(await createImageBitmap(file))
+      if (found.length) return { code: found[0].rawValue, how: 'built-in' }
+    } catch { /* try the library */ }
+  }
+  try {
+    const ZXing = await loadZXing()
+    const img = new Image(); img.src = url; await img.decode()
+    const hints = new Map([[ZXing.DecodeHintType.TRY_HARDER, true]])
+    const res = await new ZXing.BrowserMultiFormatReader(hints).decodeFromImageElement(img)
+    return { code: res.getText(), how: 'ZXing' }
+  } catch { return null }
+}
+
+async function lookUpProduct(code) {
+  try {
+    const r = await fetch(`https://world.openfoodfacts.org/api/v2/product/${code}.json?fields=product_name,brands,quantity`)
+    const j = await r.json()
+    if (j.status !== 1 || !j.product) return null
+    return j.product
+  } catch { return null }
+}
+
+// Match free text (a product name, or words read from a tag) to PriceCatcher
+// items by shared words. Simple on purpose: the test is whether it's good enough.
+const STOP = new Set(['dan', 'the', 'and', 'with', 'of', 'g', 'kg', 'ml', 'l', 'pack', 'x'])
+const words = (s) => (s || '').toLowerCase().match(/[a-z]{2,}/g)?.filter((w) => !STOP.has(w)) ?? []
+function matchText(text) {
+  const want = new Set(words(text))
+  if (!want.size) return []
+  return ITEMS.map((it) => {
+    const have = new Set(words(`${it.search} ${it.name}`))
+    let hit = 0; for (const w of want) if (have.has(w)) hit++
+    return { it, score: hit / want.size }
+  }).filter((m) => m.score > 0).sort((a, b) => b.score - a.score).slice(0, 3)
+}
+
+// ---------- 3. Text on a shelf tag (OCR) ----------
+let tessLoading = null
+function loadTesseract() {
+  tessLoading ??= new Promise((ok, fail) => {
+    const s = document.createElement('script')
+    s.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js'
+    s.onload = () => ok(window.Tesseract); s.onerror = fail
+    document.head.appendChild(s)
+  })
+  return tessLoading
+}
+
+// ---------- Photos ----------
+function addFiles(list) {
+  for (const file of list) {
+    const p = { id: state.photos.length + 1, file, url: URL.createObjectURL(file), kind: 'fresh', verdict: '', image: null, barcode: undefined, ocr: null }
+    state.photos.push(p)
+    render(p)
+    runBarcode(p)
+    if (state.textEmb) runImage(p)
+  }
+  summarize()
+}
+$('files').onchange = (e) => { addFiles(e.target.files); e.target.value = '' }
+$('camera').onchange = (e) => { addFiles(e.target.files); e.target.value = '' }
+
+async function runImage(p) {
+  p.image = 'busy'; render(p)
+  try { p.image = await classify(p.file) } catch (e) { p.image = { error: e.message } }
+  render(p); summarize()
+}
+
+async function runBarcode(p) {
+  const found = await readBarcode(p.file, p.url)
+  if (!found) { p.barcode = null; render(p); summarize(); return }
+  p.barcode = { ...found, product: undefined }
+  p.kind = 'packaged'
+  render(p)
+  const product = await lookUpProduct(found.code)
+  p.barcode.product = product
+  p.barcode.matches = product ? matchText(`${product.product_name} ${product.brands}`) : []
+  render(p); summarize()
+}
+
+async function runOcr(p) {
+  p.ocr = 'busy'; render(p)
+  try {
+    const T = await loadTesseract()
+    const t0 = performance.now()
+    const { data } = await T.recognize(p.file, 'eng')
+    const text = data.text.replace(/\s+/g, ' ').trim()
+    p.ocr = { text, prices: text.match(/RM\s?\d+[.,]\d{2}/gi) ?? [], matches: matchText(text), ms: Math.round(performance.now() - t0) }
+  } catch (e) { p.ocr = { error: e.message } }
+  render(p); summarize()
+}
+
+const pct = (x) => `${(x * 100).toFixed(0)}%`
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
+
+function render(p) {
+  let el = document.getElementById(`p${p.id}`)
+  if (!el) {
+    el = document.createElement('section')
+    el.className = 'card photo'; el.id = `p${p.id}`
+    $('photos').prepend(el)
+  }
+  const img = p.image
+  const imageHtml = !state.textEmb && !img ? '<p class="small muted">Load the model (step 1) to see guesses.</p>'
+    : img === 'busy' ? '<p class="small muted">Looking...</p>'
+      : img?.error ? `<p class="small bad">${esc(img.error)}</p>`
+        : img ? `<ol>${img.top.map((t) => `<li>${esc(t.it.label)} <span class="pct">${pct(t.p)}</span></li>`).join('')}</ol>
+                 <div class="small muted">Kind of food: ${img.cats.map(([c, v]) => `${esc(c)} ${pct(v)}`).join(' · ')} · ${img.ms} ms</div>` : ''
+  const b = p.barcode
+  const barcodeHtml = b === undefined ? '<span class="small muted">Looking for a barcode...</span>'
+    : b === null ? '<span class="small muted">No barcode found.</span>'
+      : `<div class="small">Barcode <b>${esc(b.code)}</b> (${b.how}). ${
+          b.product === undefined ? 'Looking it up...'
+            : b.product === null ? '<span class="bad">Not in Open Food Facts.</span>'
+              : `Open Food Facts: <b>${esc(b.product.product_name)}</b> ${esc(b.product.brands)} ${esc(b.product.quantity)}`}</div>
+         ${b.matches?.length ? `<ol>${b.matches.map((m) => `<li>${esc(m.it.name)} <span class="pct">${pct(m.score)} words match</span></li>`).join('')}</ol>` : ''}`
+  const o = p.ocr
+  const ocrHtml = o === null ? '<button class="ghost small" data-ocr>Read text on a tag</button>'
+    : o === 'busy' ? '<span class="small muted">Reading text (first time downloads about 10 MB)...</span>'
+      : o.error ? `<span class="small bad">${esc(o.error)}</span>`
+        : `<div class="small"><span class="muted">Read in ${o.ms} ms:</span> "${esc(o.text.slice(0, 160))}${o.text.length > 160 ? '...' : ''}"</div>
+           <div class="small">Prices seen: ${o.prices.length ? esc(o.prices.join(', ')) : 'none'}</div>
+           ${o.matches.length ? `<ol>${o.matches.map((m) => `<li>${esc(m.it.name)} <span class="pct">${pct(m.score)}</span></li>`).join('')}</ol>` : ''}`
+  el.innerHTML = `
+    <img src="${p.url}" alt="Photo ${p.id}" />
+    <div>
+      <div class="row">
+        <b>Photo ${p.id}</b>
+        <select data-kind><option value="fresh">Fresh item</option><option value="packaged">Packaged item</option></select>
+        <select data-verdict>
+          <option value="">Mark the result...</option>
+          <option value="top1">Image: 1st guess right</option>
+          <option value="top5">Image: right, in top 5</option>
+          <option value="barcode">Barcode found it</option>
+          <option value="ocr">Tag text found it</option>
+          <option value="wrong">None of them right</option>
+        </select>
+      </div>
+      <div class="sec"><span class="tag">Image model</span>${imageHtml}</div>
+      <div class="sec"><span class="tag">Barcode</span> ${barcodeHtml}</div>
+      <div class="sec"><span class="tag">Shelf tag text</span> ${ocrHtml}</div>
+    </div>`
+  el.querySelector('[data-kind]').value = p.kind
+  el.querySelector('[data-verdict]').value = p.verdict
+  el.querySelector('[data-kind]').onchange = (e) => { p.kind = e.target.value; summarize() }
+  el.querySelector('[data-verdict]').onchange = (e) => { p.verdict = e.target.value; summarize() }
+  el.querySelector('[data-ocr]')?.addEventListener('click', () => runOcr(p))
+}
+
+function summarize() {
+  const ps = state.photos
+  if (!ps.length) return
+  const rows = ['fresh', 'packaged'].map((kind) => {
+    const g = ps.filter((p) => p.kind === kind)
+    const marked = g.filter((p) => p.verdict)
+    const n = (v) => marked.filter((p) => p.verdict === v).length
+    return { kind, total: g.length, marked: marked.length, top1: n('top1'), top5: n('top1') + n('top5'), barcode: n('barcode'), ocr: n('ocr'), wrong: n('wrong') }
+  })
+  const times = ps.map((p) => p.image?.ms).filter(Boolean)
+  const avg = times.length ? Math.round(times.reduce((a, b) => a + b, 0) / times.length) : null
+  const barcodes = ps.filter((p) => p.barcode).length
+  const inOff = ps.filter((p) => p.barcode?.product).length
+  $('summary').innerHTML = `
+    <table><tr><th></th><th>Photos</th><th>Marked</th><th>Image 1st</th><th>Image top 5</th><th>Barcode</th><th>Tag text</th><th>Wrong</th></tr>
+    ${rows.map((r) => `<tr><td>${r.kind}</td><td>${r.total}</td><td>${r.marked}</td><td class="ok">${r.top1}</td><td>${r.top5}</td><td>${r.barcode}</td><td>${r.ocr}</td><td class="bad">${r.wrong}</td></tr>`).join('')}
+    </table>
+    <p>Barcodes read: ${barcodes} of ${ps.length}; found in Open Food Facts: ${inOff}.
+       Model load: ${state.loadMs ? (state.loadMs / 1000).toFixed(1) + ' s' : 'not loaded'}; average per photo: ${avg ? avg + ' ms' : '-'}.
+       Device: ${esc(navigator.userAgent.match(/\(([^)]+)\)/)?.[1] ?? navigator.userAgent)}</p>`
+  return rows
+}
+
+$('copy').onclick = async () => {
+  const rows = summarize() || []
+  const lines = ['SenSen scan test results', `Device: ${navigator.userAgent}`,
+    `Model load ms: ${state.loadMs ?? '-'}`, '',
+    ...rows.map((r) => `${r.kind}: ${r.total} photos, ${r.marked} marked, image 1st ${r.top1}, image top5 ${r.top5}, barcode ${r.barcode}, tag ${r.ocr}, wrong ${r.wrong}`), '',
+    ...state.photos.map((p) => [
+      `#${p.id} ${p.kind} verdict=${p.verdict || '-'}`,
+      `  image: ${p.image?.top ? p.image.top.map((t) => `${t.it.name} ${pct(t.p)}`).join(' | ') : '-'} (${p.image?.ms ?? '-'} ms)`,
+      `  barcode: ${p.barcode ? `${p.barcode.code} ${p.barcode.product ? `"${p.barcode.product.product_name}" ${p.barcode.product.brands ?? ''}` : 'not in OFF'} -> ${(p.barcode.matches ?? []).map((m) => m.it.name).join(' | ') || 'no match'}` : 'none'}`,
+      p.ocr?.text ? `  tag: "${p.ocr.text.slice(0, 120)}" prices ${p.ocr.prices.join(', ') || '-'}` : '',
+    ].filter(Boolean).join('\n'))]
+  const text = lines.join('\n')
+  $('out').hidden = false; $('out').value = text
+  try { await navigator.clipboard.writeText(text); $('copied').textContent = 'Copied. Paste it to Claude.' }
+  catch { $('copied').textContent = 'Select the text below and copy it.' }
+}
+</script>
+</body>
+</html>
