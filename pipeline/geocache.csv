@@ -2188,6 +2188,7 @@ premise_code,address,lat,lon,precision,query,strategy,checked,suburb
 22277,"LOT 505, TAMAN PASIFIC,JALAN SELIRIK,",2.016639,112.9421442,street,"JALAN SELIRIK, Kapit, Sarawak, Malaysia",3,,Kapit
 22278,"LOT 234,,KAPIT TOWN DISTRICT,,",2.0139027,112.9356766,town,"Kapit, Sarawak, Malaysia",3,,
 22279,"NO. 27, PERSIARAN MEWAH,,BANDAR TUN RAZAK,-",3.0837531,101.7228741,address,"PERSIARAN MEWAH, BANDAR TUN RAZAK, -",,,Bandar Tun Razak
+22280,"Test,Test,",2.9179726,101.6840801,town,"Putrajaya, Putrajaya, Malaysia",3,,
 22282,"LOT 1-6, BLOK C, BANDAR TONG HUAT BATU 3,,JALAN UTARA BATU 3,,",5.8633905,118.0914547,street,"JALAN UTARA BATU 3, Sandakan, Sabah, Malaysia",3,,Batu 3
 22283,"LOT 18108, MUKIM BANDAR BARU GUA MUSANG,DAERAH GALAS,,",5.0198136,102.0382663,town,"Gua Musang, Kelantan, Malaysia",3,,
 22284,"PT 734 (1-3),,KAMPUNG CHABANG EMPAT, TUMPAT,",6.1469677,102.162991,address,"KAMPUNG CHABANG EMPAT, TUMPAT, Kelantan, Malaysia",3,,Taman Murni
